@@ -28,7 +28,8 @@ library(ggpubr)
 library(cowplot)
 library(ggplot2)
 library(sjmisc)
-
+library(ggeffects)
+library(estimatr)
 
 #Import data as csv
 
@@ -344,6 +345,39 @@ pool.r.squared(model3, adjusted = TRUE)
 
 
 #Model 4
+model4 <- with(imputed, lm_robust(cohesion ~ factor(combinations) + sharedchild + factor(parttime)
+                                  + age_child + factor(combinations):factor(parttime) +
+                                    female_child  + age_parent + female_respondent + educ_par + 
+                                    age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12 , clusters = CBSvolgnr_hh))
+model4 <- pool(model4)
+summary(model4)
+pool.r.squared(model4)
+pool.r.squared(model4, adjusted = TRUE)
+
+predictions_interact <- lapply(1:5, function(i) {
+  m <- lm_robust(cohesion ~ factor(combinations) + sharedchild + factor(parttime)
+                 + age_child + factor(combinations):factor(parttime) +
+                   female_child  + age_parent + female_respondent + educ_par + 
+                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12 , clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
+  ggpredict(m, terms = c("combinations", "parttime"))
+})
+predictions_interact <- pool_predictions(predictions_interact)
+
+p3 <- ggplot(data=predictions_interact, aes(x=factor(x), y=predicted, fill = factor(group))) +
+  geom_bar(stat="identity", position = "dodge") + 
+  scale_fill_viridis(discrete = T) +
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1, position=position_dodge(.9)) + 
+  labs(title = 'Stepfamily Cohesion by Shared Biological Child',
+       x = "Stepfamily configuration", y = "Predicted stepfamily cohesion", ) +
+  scale_x_discrete(labels = c('Resident biological child, \n no stepchild', 
+                              'Resident biological child & \n resident stepchild',
+                              '(Non)resident \n biological child & \n (non)resident \n stepchild')) +
+  ylim(0,5) +
+  theme(plot.title=element_text(hjust=0.5), legend.direction = "horizontal") +
+  #scale_fill_discrete(name = "Having shared \n biological child", labels = c("Yes", "No")) +
+  scale_fill_manual(name = "Having shared \n biological child", values = c('black', 'grey'), labels = c("Yes", "No")) +
+  theme(legend.position="top")
+p3
 
 
 

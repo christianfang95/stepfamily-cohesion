@@ -131,3 +131,4 @@ def main(dataset):
     return d2
 
 frame = main(data)
+frame.to_csv("/Volumes/webdav.uu.nl/Data/Research/FSW/Research_data/SOC/Anne-Rigt Poortman/Nieuwe Families NL/Zielinski/Cohesion paper/data_cleaned.csv")
