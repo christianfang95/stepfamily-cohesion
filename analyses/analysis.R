@@ -248,7 +248,8 @@ histogram <- function(){
     rremove("xlab") +
     rremove("x.text") +
     rremove("x.ticks") +
-    rremove("legend")
+    rremove("legend") +
+    labs(title = "Histogram and density of Stepfamily Cohesion")
   
   # 3. Align the two plots and then overlay them.
   aligned_plots <- align_plots(phist, pdensity, align="hv", axis="tblr")
@@ -257,8 +258,8 @@ histogram <- function(){
 }
 
 
-histogram()
-
+h <- histogram()
+h
 
 #Run regressions
 options(scipen=999)
@@ -285,14 +286,15 @@ predictions <- pool_predictions(predictions)
 
 
 p <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
-  geom_bar(stat="identity")+ 
+  geom_bar(stat="identity", fill="white", color='black')+ 
   geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
-  labs(title = "Stepfamily Cohesion per Stepfamily Constellation", 
+  labs(title = "Stepfamily Cohesion, by Stepfamily Constellation", 
        x = "Stepfamily constellation", y = "Predicted stepfamily cohesion") +
   scale_x_discrete(labels = c('Resident biological child, \n no stepchild', 
                               'Resident biological child & \n resident stepchild',
                               '(Non)resident \n biological child & \n (non)resident \n stepchild')) +
-  ylim(0,5)
+  ylim(0,5) +
+  theme(plot.title=element_text(hjust=0.5))
 p
 
 
