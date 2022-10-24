@@ -210,7 +210,7 @@ alpha <- lapply(1:5, function(i){
 })
 alpha <- mean(alpha[[1]]$alpha, alpha[[2]]$alpha, alpha[[3]]$alpha, alpha[[4]]$alpha, alpha[[5]]$alpha)
 
-#store number of former households 
+#store number of former households  
 nformerhh <- length(unique(complete$CBSvolgnr_hh))
 
 #Histogram of cohesion
