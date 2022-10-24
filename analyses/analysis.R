@@ -23,14 +23,15 @@
 #df <- py_to_r.pandas.core.frame.DataFrame(data)
 
 library(mice)
-
+library(ggeffects)
 library(ggpubr)
 library(cowplot)
 library(ggplot2)
 library(sjmisc)
 library(ggeffects)
 library(estimatr)
-
+library(esc)
+library(ltm)
 #Import data as csv
 
 raw <- data.frame(read.csv('/Volumes/webdav.uu.nl/Data/Research/FSW/Research_data/SOC/Anne-Rigt Poortman/Nieuwe Families NL/Zielinski/Cohesion paper/data_cleaned.csv'))
@@ -82,7 +83,7 @@ densityplot(imputed)
 #Summary table for descriptive statistics
 summary_table <- function(){
   impL <- complete(imputed,"long",include = F) # long format without the original dataset
-  
+  #Before imputations
   cohesion_b <- list(mean(raw$cohesion, na.rm = TRUE), min(raw$cohesion, na.rm = TRUE), 
                      max(raw$cohesion, na.rm = TRUE), sd(raw$cohesion, na.rm = TRUE))
   resnostep_b <- list(sum(raw$combinations == 0)/length(raw$combinations), min(raw$combinations, na.rm = TRUE),
@@ -121,53 +122,18 @@ summary_table <- function(){
   educ_partner_b <- list(mean(raw$educ_partner, na.rm = TRUE), min(raw$educ_partner, na.rm = TRUE), 
                          max(raw$educ_partner, na.rm = TRUE), sd(raw$educ_partner, na.rm = TRUE))
   
+  relqual_child_b <- list(mean(raw$A3J02, na.rm = TRUE), min(raw$A3J02, na.rm = TRUE), 
+                        max(raw$A3J02, na.rm = TRUE), sd(raw$A3J02, na.rm = TRUE))
+    
+  rel_child_step_b <- list(mean(raw$A3J29, na.rm = TRUE), min(raw$A3J29, na.rm = TRUE), 
+                         max(raw$A3J29, na.rm = TRUE), sd(raw$A3J29, na.rm = TRUE))
+  rel_partner_b <- list(mean(raw$A3P12, na.rm = TRUE), min(raw$A3P12, na.rm = TRUE), 
+                         max(raw$A3P12, na.rm = TRUE), sd(raw$A3P12, na.rm = TRUE))
+  
+
   list_b <- list(cohesion_b, resnostep_b, resres_b, assym_b, sharedchild_b, parttime_b, age_child_b, 
                  female_child_b, age_parent_b, female_respondent_b, educ_par_b, age_partner_b, educ_partner_b,
-                 duration_b)
-  
-  #After imputation
-  cohesion_a <- list(mean(impL$cohesion, na.rm = TRUE), min(impL$cohesion, na.rm = TRUE), 
-                     max(impL$cohesion, na.rm = TRUE), sd(impL$cohesion, na.rm = TRUE))
-  resnostep_b <- list(sum(raw$combinations == 0)/length(raw$combinations), min(raw$combinations, na.rm = TRUE),
-                      max(raw$combinations, na.rm = TRUE), '')
-  resres_b <- list(sum(raw$combinations == 1)/length(raw$combinations), min(raw$combinations == 1, na.rm = TRUE),
-                   max(raw$combinations == 1, na.rm = TRUE), '')
-  assym_b <- list(sum(raw$combinations == 2)/length(raw$combinations), min(raw$combinations == 2, na.rm = TRUE),
-                  max(raw$combinations == 2, na.rm = TRUE), '')
-  parttime_b <- list(mean(raw$parttime, na.rm = TRUE), min(raw$parttime, na.rm = TRUE), 
-                     max(raw$parttime, na.rm = TRUE), '')
-  
-  sharedchild_b <- list(mean(raw$sharedchild, na.rm = TRUE), min(raw$sharedchild, na.rm = TRUE), 
-                        max(raw$sharedchild, na.rm = TRUE), '')
-  
-  age_child_b <- list(mean(raw$age_child, na.rm = TRUE), min(raw$age_child, na.rm = TRUE), 
-                      max(raw$age_child, na.rm = TRUE), sd(raw$age_child, na.rm = TRUE))
-  
-  female_child_b <- list(mean(raw$female_child, na.rm = TRUE), min(raw$female_child, na.rm = TRUE), 
-                         max(raw$female_child, na.rm = TRUE), '')
-  
-  age_parent_b <-  list(mean(raw$age_parent, na.rm = TRUE), min(raw$age_parent, na.rm = TRUE), 
-                        max(raw$age_parent, na.rm = TRUE), sd(raw$age_parent, na.rm = TRUE))
-  
-  female_respondent_b <- list(mean(raw$female_respondent, na.rm = TRUE), min(raw$female_respondent, na.rm = TRUE), 
-                              max(raw$female_respondent, na.rm = TRUE), '')
-  
-  duration_b <- list(mean(raw$duration, na.rm = TRUE), min(raw$duration, na.rm = TRUE), 
-                     max(raw$duration, na.rm = TRUE), sd(raw$duration, na.rm = TRUE))
-  
-  educ_par_b <- list(mean(raw$educ_par, na.rm = TRUE), min(raw$educ_par, na.rm = TRUE), 
-                     max(raw$educ_par, na.rm = TRUE), sd(raw$educ_par, na.rm = TRUE))
-  
-  age_partner_b <-  list(mean(raw$age_partner, na.rm = TRUE), min(raw$age_partner, na.rm = TRUE), 
-                         max(raw$age_partner, na.rm = TRUE), sd(raw$age_partner, na.rm = TRUE))
-  
-  educ_partner_b <- list(mean(raw$educ_partner, na.rm = TRUE), min(raw$educ_partner, na.rm = TRUE), 
-                         max(raw$educ_partner, na.rm = TRUE), sd(raw$educ_partner, na.rm = TRUE))
-  
-  list_b <- list(cohesion_b, resnostep_b, resres_b, assym_b, sharedchild_b, parttime_b, age_child_b, 
-                 female_child_b, age_parent_b, female_respondent_b, educ_par_b, age_partner_b, educ_partner_b,
-                 duration_b)
-  
+                 duration_b, relqual_child_b, rel_child_step_b,  rel_partner_b)
   #After imputation
   resnostep_a <- list(sum(impL$combinations == 0)/length(impL$combinations), min(impL$combinations, na.rm = TRUE),
                       max(impL$combinations, na.rm = TRUE), '')
@@ -205,30 +171,47 @@ summary_table <- function(){
   educ_partner_a <- list(mean(impL$educ_partner, na.rm = TRUE), min(impL$educ_partner, na.rm = TRUE), 
                          max(impL$educ_partner, na.rm = TRUE), sd(impL$educ_partner, na.rm = TRUE))
   
+  relqual_child_a <- list(mean(impL$A3J02, na.rm = TRUE), min(impL$A3J02, na.rm = TRUE), 
+                          max(impL$A3J02, na.rm = TRUE), sd(impL$A3J02, na.rm = TRUE))
+  rel_child_step_a <- list(mean(impL$A3J29, na.rm = TRUE), min(impL$A3J29, na.rm = TRUE), 
+                           max(impL$A3J29, na.rm = TRUE), sd(impL$A3J29, na.rm = TRUE))
+  rel_partner_a <- list(mean(impL$A3P12, na.rm = TRUE), min(impL$A3P12, na.rm = TRUE), 
+                        max(impL$A3P12, na.rm = TRUE), sd(impL$A3P12, na.rm = TRUE))
+  
+  
   list_a <- list(cohesion_a, resnostep_a, resres_a, assym_a, sharedchild_a, parttime_a, age_child_a, 
                  female_child_a, age_parent_a, female_respondent_a, educ_par_a, age_partner_a, educ_partner_a,
-                 duration_a)
+                 duration_a, relqual_child_a, rel_child_step_a, rel_partner_a)
   
   frame_b <- as.data.frame(do.call(rbind, list_b))
   colnames(frame_b) <- c('M', 'Min', 'Max', 'sd')
   rownames(frame_b) <- c('Cohesion', 'Res-no step', 'Res - res', 'Asymm', 'Shared Child', 'parttime',
                          'Age child', 'Child female', 'Age parent', 'Parent female', 'Education parent', 
-                         'Age partner', 'Education partner', 'Duration stepfamily')
+                         'Age partner', 'Education partner', 'Duration stepfamily', 'Rel child', 'Rel c-step', 'Rel partner')
   frame_b$ID <- rownames(frame_b)
   
   frame_a <- as.data.frame(do.call(rbind, list_a))
   colnames(frame_a) <- c('M', 'Min', 'Max', 'sd')
   rownames(frame_a) <- c('Cohesion', 'Res-no step', 'Res - res', 'Asymm', 'Shared Child', 'parttime',
                          'Age child', 'Child female', 'Age parent', 'Parent female', 'Education parent', 
-                         'Age partner', 'Education partner', 'Duration stepfamily')
+                         'Age partner', 'Education partner', 'Duration stepfamily', 'Rel child', 'Rel c-step', 'Rel partner')
   
   frame_a$ID <- rownames(frame_a)
-  
-  
   total <- merge(frame_b, frame_a, by = 'ID')
   return(total)}
 
 total = summary_table()
+
+#Calculate alpha for cohesion
+
+alpha <- lapply(1:5, function(i){
+  complete <- complete(imputed, action = i) 
+  alpha <- cronbach.alpha(complete[c("cohes_a", "cohes_b", "cohes_c", "cohes_d")])
+})
+alpha <- mean(alpha[[1]]$alpha, alpha[[2]]$alpha, alpha[[3]]$alpha, alpha[[4]]$alpha, alpha[[5]]$alpha)
+
+#store number of former households
+nformerhh <- length(unique(complete$CBSvolgnr_hh))
 
 #Histogram of cohesion
 
@@ -262,6 +245,7 @@ histogram <- function(){
 h <- histogram()
 h
 
+
 #Run regressions
 options(scipen=999)
 model1 <- with(imputed, lm_robust(cohesion ~ factor(combinations)
@@ -273,30 +257,34 @@ summary(model1)
 pool.r.squared(model1)
 pool.r.squared(model1, adjusted = TRUE)
 
-library(ggeffects)
-
-#Pool marginal effects
-predictions <- lapply(1:5, function(i) {
-  m <- lm_robust(cohesion ~ factor(combinations)
-                 + age_child + 
-                   female_child  + age_parent + female_respondent + educ_par + 
-                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12 , clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
-  ggpredict(m, "combinations")
+#Calculate effect sizes
+cohensd <- lapply(1:5, function(i) {
+  complete <- complete(imputed, action = i)
+  SD_Y <- sd(complete$cohesion)
+  model1ES <- lm_robust(cohesion ~ factor(combinations)
+                        + age_child + 
+                          female_child  + age_parent + female_respondent + educ_par + 
+                          age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete)
+  table <- table(complete$combinations)
+  control <- table[names(table) == 0] #Control group size
+  t1 <- table[names(table) == 1] #treatment group 1
+  t2 <- table[names(table) == 2] #treatment group 2
+  esize_1 <- esc_B(model1ES$coefficients[2], SD_Y, t1, control)
+  es_1 <- esize_1$es
+  esize_2 <- esc_B(model1ES$coefficients[3], SD_Y, t2, control)
+  es_2 <- esize_2$es
+  return(c(es_1, es_2))
 })
-predictions <- pool_predictions(predictions)
 
+pooled_effects <- function(){
+  fr <- t(data.frame(cohensd))
+  m1 <- mean(fr[1:5])
+  m2 <- mean(fr[6:10])
+  return(c(m1, m2))
+}
 
-p <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
-  geom_bar(stat="identity", fill="white", color='black')+ 
-  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
-  labs(title = "Stepfamily Cohesion, by Stepfamily Constellation", 
-       x = "Stepfamily constellation", y = "Predicted stepfamily cohesion") +
-  scale_x_discrete(labels = c('Resident biological child, \n no stepchild', 
-                              'Resident biological child & \n resident stepchild',
-                              '(Non)resident \n biological child & \n (non)resident \n stepchild')) +
-  ylim(0,5) +
-  theme(plot.title=element_text(hjust=0.5))
-p
+effectsizes <- pooled_effects()
+
 
 
 #Model 2
@@ -310,34 +298,40 @@ summary(model2)
 pool.r.squared(model2)
 pool.r.squared(model2, adjusted = TRUE)
 
-#Predictions for shared child
-predictions <- lapply(1:5, function(i) {
-  m <- lm_robust(cohesion ~ factor(combinations)
-                 + age_child + sharedchild + 
-                   female_child  + age_parent + female_respondent + educ_par + 
-                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12 , clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
-  ggpredict(m, "sharedchild")
+#Effect sizes for shared child
+cohensd_child <- lapply(1:5, function(i) {
+  complete <- complete(imputed, action = i)
+  SD_Y <- sd(complete$cohesion)
+  model2ES <- lm_robust(cohesion ~ factor(combinations)
+                        + age_child + factor(sharedchild) + 
+                          female_child  + age_parent + female_respondent + educ_par + 
+                          age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete)
+  table <- table(complete$sharedchild)
+  control <- table[names(table) == 0] #Control group size
+  t1 <- table[names(table) == 1] #treatment group
+  esize_1 <- esc_B(model1ES$coefficients[2], SD_Y, t1, control)
+  es_1 <- esize_1$es
+  return(c(es_1))
 })
-predictions <- pool_predictions(predictions)
+
+pooled_effects_child <- function(){
+  fr <- t(data.frame(cohensd_child))
+  m1 <- mean(fr[1:5])
+  return(c(m1))
+}
+effectsizes_child <- pooled_effects_child()
 
 
-p2 <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
-  geom_bar(stat="identity")+ 
-  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
-  labs(title = 'Stepfamily Cohesion by Shared Biological Child',
-       x = "Having a shared child", y = "Predicted stepfamily cohesion") +
-  scale_x_discrete(labels = c('No shared child', 
-                              'Shared child')) +
-  ylim(0,5) +
-  theme(plot.title=element_text(hjust=0.5))
-p2
+
+
+
 
 #Model 3
 
 model3 <- with(imputed, lm_robust(cohesion ~ factor(combinations) + sharedchild + factor(parttime)
                                   + age_child + 
                                     female_child  + age_parent + female_respondent + educ_par + 
-                                    age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12 , clusters = CBSvolgnr_hh))
+                                    age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
 model3 <- pool(model3)
 summary(model3)
 pool.r.squared(model3)
@@ -354,6 +348,99 @@ summary(model4)
 pool.r.squared(model4)
 pool.r.squared(model4, adjusted = TRUE)
 
+#Effect sizes
+cohensd_interact <- lapply(1:5, function(i) {
+  complete <- complete(imputed, action = i)
+  SD_Y <- sd(complete$cohesion)
+  model2ES <- lm_robust(cohesion ~ factor(combinations)
+                        + age_child + factor(sharedchild) + 
+                          female_child  + age_parent + female_respondent + educ_par + 
+                          age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete)
+  table <- table(complete$sharedchild)
+  control <- table[names(table) == 0] #Control group size
+  t1 <- table[names(table) == 1] #treatment group
+  esize_1 <- esc_B(model1ES$coefficients[2], SD_Y, t1, control)
+  es_1 <- esize_1$es
+  return(c(es_1))
+})
+
+pooled_effects_child <- function(){
+  fr <- t(data.frame(cohensd_interact))
+  m1 <- mean(fr[1:5])
+  return(c(m1))
+}
+effectsizes_child <- pooled_effects_child()
+
+
+
+
+#Tabulate models 
+m1 <- summary(model2)
+m2 <- summary(model3)
+m3 <- summary(model4)
+  #Merge
+total_models <- merge(m1, m2, by='term', all = TRUE)
+total_models <- merge(total_models, m3, by='term', all = TRUE)
+#Remove unnecessary columns
+total_models <- subset(total_models, select = -c(statistic.x, df.x, statistic.y, df.y, statistic, df) )
+
+
+
+#Predictions from Model 3
+  #Difference between constellations
+
+#Pool marginal effects
+predictions <- lapply(1:5, function(i) {
+  m <- lm_robust(cohesion ~ factor(combinations)
+                 + age_child + factor(sharedchild) + factor(combinations):factor(parttime) + factor(parttime) +
+                   female_child  + age_parent + female_respondent + educ_par + 
+                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
+  ggpredict(m, "combinations")
+})
+predictions <- pool_predictions(predictions)
+
+#Plot
+p1 <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
+  geom_bar(stat="identity", fill="white", color='black')+ 
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
+  labs(title = "Stepfamily Cohesion, by Stepfamily Constellation", 
+       x = "Stepfamily constellation", y = "Predicted stepfamily cohesion") +
+  scale_x_discrete(labels = c('Resident biological child, \n no stepchild', 
+                              'Resident biological child & \n resident stepchild',
+                              '(Non)resident \n biological child & \n (non)resident \n stepchild')) +
+  ylim(0,5) +
+  theme(plot.title=element_text(hjust=0.5))
+p1
+
+#Predictions for shared child
+predictions <- lapply(1:5, function(i) {
+  m <- lm_robust(cohesion ~ factor(combinations)
+                 + age_child + factor(sharedchild) + factor(combinations):factor(parttime) + factor(parttime) +
+                   female_child  + age_parent + female_respondent + educ_par + 
+                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
+  ggpredict(m, "sharedchild")
+})
+predictions <- pool_predictions(predictions)
+
+
+
+p2 <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
+  geom_bar(stat="identity", fill="white", color='black')+ 
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
+  labs(title = 'Stepfamily Cohesion by Shared Biological Child',
+       x = "Having a shared child", y = "Predicted stepfamily cohesion") +
+  scale_x_discrete(labels = c('No shared child', 
+                              'Shared child')) +
+  ylim(0,5) +
+  theme(plot.title=element_text(hjust=0.5))
+p2
+
+
+
+
+
+
+#Interaction
 predictions_interact <- lapply(1:5, function(i) {
   m <- lm_robust(cohesion ~ factor(combinations) + sharedchild + factor(parttime)
                  + age_child + factor(combinations):factor(parttime) +
@@ -364,10 +451,10 @@ predictions_interact <- lapply(1:5, function(i) {
 predictions_interact <- pool_predictions(predictions_interact)
 
 p3 <- ggplot(data=predictions_interact, aes(x=factor(x), y=predicted, fill = factor(group))) +
-  geom_bar(stat="identity", position = "dodge") + 
-  scale_fill_viridis(discrete = T) +
+  geom_bar(stat="identity", position = "dodge", color='black') + 
+  #scale_fill_viridis(discrete = T) +
   geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1, position=position_dodge(.9)) + 
-  labs(title = 'Stepfamily Cohesion by Shared Biological Child',
+  labs(title = 'Stepfamily Cohesion by Part-time residence',
        x = "Stepfamily configuration", y = "Predicted stepfamily cohesion", ) +
   scale_x_discrete(labels = c('Resident biological child, \n no stepchild', 
                               'Resident biological child & \n resident stepchild',
@@ -375,9 +462,8 @@ p3 <- ggplot(data=predictions_interact, aes(x=factor(x), y=predicted, fill = fac
   ylim(0,5) +
   theme(plot.title=element_text(hjust=0.5), legend.direction = "horizontal") +
   #scale_fill_discrete(name = "Having shared \n biological child", labels = c("Yes", "No")) +
-  scale_fill_manual(name = "Having shared \n biological child", values = c('black', 'grey'), labels = c("Yes", "No")) +
+  scale_fill_manual(name = "Part-time residence of either child", values = c('white', 'grey'), , labels = c("No", "Yes")) +
   theme(legend.position="top")
 p3
-
 
 
