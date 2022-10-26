@@ -290,7 +290,7 @@ effectsizes <- pooled_effects()
 #Model 2
 
 model2 <- with(imputed, lm_robust(cohesion ~ factor(combinations) + sharedchild
-                                  + age_child + 
+                                  + age_child + factor(parttime) + 
                                     female_child  + age_parent + female_respondent + educ_par + 
                                     age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12 , clusters = CBSvolgnr_hh))
 model2 <- pool(model2)
@@ -298,18 +298,49 @@ summary(model2)
 pool.r.squared(model2)
 pool.r.squared(model2, adjusted = TRUE)
 
+#Effect sizes for stepfamily constellations
+#Calculate effect sizes
+cohensd <- lapply(1:5, function(i) {
+  complete <- complete(imputed, action = i)
+  SD_Y <- sd(complete$cohesion)
+  model1ES <- lm_robust(cohesion ~ factor(combinations)
+                        + age_child + factor(sharedchild) + factor(parttime) + 
+                          female_child  + age_parent + female_respondent + educ_par + 
+                          age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete)
+  table <- table(complete$combinations)
+  control <- table[names(table) == 0] #Control group size
+  t1 <- table[names(table) == 1] #treatment group 1
+  t2 <- table[names(table) == 2] #treatment group 2
+  esize_1 <- esc_B(model1ES$coefficients[2], SD_Y, t1, control)
+  es_1 <- esize_1$es
+  esize_2 <- esc_B(model1ES$coefficients[3], SD_Y, t2, control)
+  es_2 <- esize_2$es
+  return(c(es_1, es_2))
+})
+
+pooled_effects <- function(){
+  fr <- t(data.frame(cohensd))
+  m1 <- mean(fr[1:5])
+  m2 <- mean(fr[6:10])
+  return(c(m1, m2))
+}
+
+effectsizes <- pooled_effects()
+
+
+
 #Effect sizes for shared child
 cohensd_child <- lapply(1:5, function(i) {
   complete <- complete(imputed, action = i)
   SD_Y <- sd(complete$cohesion)
   model2ES <- lm_robust(cohesion ~ factor(combinations)
-                        + age_child + factor(sharedchild) + 
+                        + age_child + factor(sharedchild) + factor(parttime) + 
                           female_child  + age_parent + female_respondent + educ_par + 
                           age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete)
   table <- table(complete$sharedchild)
   control <- table[names(table) == 0] #Control group size
   t1 <- table[names(table) == 1] #treatment group
-  esize_1 <- esc_B(model1ES$coefficients[2], SD_Y, t1, control)
+  esize_1 <- esc_B(model2ES$coefficients[5], SD_Y, t1, control)
   es_1 <- esize_1$es
   return(c(es_1))
 })
@@ -320,6 +351,113 @@ pooled_effects_child <- function(){
   return(c(m1))
 }
 effectsizes_child <- pooled_effects_child()
+
+#Effect size parttime
+cohensd_parttime <- lapply(1:5, function(i) {
+  complete <- complete(imputed, action = i)
+  SD_Y <- sd(complete$cohesion)
+  model2ES <- lm_robust(cohesion ~ factor(combinations)
+                        + age_child + factor(sharedchild) + factor(parttime) + 
+                          female_child  + age_parent + female_respondent + educ_par + 
+                          age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete)
+  table <- table(complete$parttime)
+  control <- table[names(table) == 0] #Control group size
+  t1 <- table[names(table) == 1] #treatment group
+  esize_1 <- esc_B(model2ES$coefficients[6], SD_Y, t1, control)
+  es_1 <- esize_1$es
+  return(c(es_1))
+})
+
+pooled_effects_parttime <- function(){
+  fr <- t(data.frame(cohensd_parttime))
+  m1 <- mean(fr[1:5])
+  return(c(m1))
+}
+effectsizes_parttime <- pooled_effects_parttime()
+
+cohensd_age <- lapply(1:5, function(i) {
+  complete <- complete(imputed, action = i)
+  SD_Y <- sd(complete$cohesion)
+  model2ES <- lm_robust(cohesion ~ factor(combinations)
+                        + age_child + factor(sharedchild) + factor(parttime) + 
+                          female_child  + age_parent + female_respondent + educ_par + 
+                          age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete)
+  table <- table(complete$age_child)
+  control <- table[names(table) == 0] #Control group size
+  t1 <- table[names(table) == 1] #treatment group
+  esize_1 <- esc_B(model2ES$coefficients[4], SD_Y, t1, control)
+  es_1 <- esize_1$es
+  return(c(es_1))
+})
+
+pooled_effects_age <- function(){
+  fr <- t(data.frame(cohensd_age))
+  m1 <- mean(fr[1:5])
+  return(c(m1))
+}
+age <- pooled_effects_age()
+
+
+#PLOTS
+#Pool marginal effects
+predictions <- lapply(1:5, function(i) {
+  m <- lm_robust(cohesion ~ factor(combinations)
+                 + age_child + factor(sharedchild) + factor(parttime) +
+                   female_child  + age_parent + female_respondent + educ_par + 
+                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
+  ggpredict(m, "combinations")
+})
+predictions <- pool_predictions(predictions)
+
+#Plot
+p1 <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
+  geom_bar(stat="identity", fill="white", color='black')+ 
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
+  labs(title = "Stepfamily Cohesion, by Stepfamily Constellation", 
+       x = "Stepfamily constellation", y = "Predicted stepfamily cohesion") +
+  scale_x_discrete(labels = c('Resident biological child, \n no stepchild', 
+                              'Resident biological child & \n resident stepchild',
+                              '(Non)resident \n biological child & \n (non)resident \n stepchild')) +
+  ylim(0,5) +
+  theme(plot.title=element_text(hjust=0.5))
+p1
+
+#Predictions for shared child
+predictions <- lapply(1:5, function(i) {
+  m <- lm_robust(cohesion ~ factor(combinations)
+                 + age_child + factor(sharedchild) + factor(parttime) +
+                   female_child  + age_parent + female_respondent + educ_par + 
+                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
+  ggpredict(m, "sharedchild")
+})
+predictions <- pool_predictions(predictions)
+
+
+
+p2 <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
+  geom_bar(stat="identity", fill="white", color='black')+ 
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
+  labs(title = 'Stepfamily Cohesion, by Shared Biological Child',
+       x = "Having a shared child", y = "Predicted stepfamily cohesion") +
+  scale_x_discrete(labels = c('No shared child', 
+                              'Shared child')) +
+  ylim(0,5) +
+  theme(plot.title=element_text(hjust=0.5))
+p2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -348,29 +486,6 @@ summary(model4)
 pool.r.squared(model4)
 pool.r.squared(model4, adjusted = TRUE)
 
-#Effect sizes
-cohensd_interact <- lapply(1:5, function(i) {
-  complete <- complete(imputed, action = i)
-  SD_Y <- sd(complete$cohesion)
-  model2ES <- lm_robust(cohesion ~ factor(combinations)
-                        + age_child + factor(sharedchild) + 
-                          female_child  + age_parent + female_respondent + educ_par + 
-                          age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete)
-  table <- table(complete$sharedchild)
-  control <- table[names(table) == 0] #Control group size
-  t1 <- table[names(table) == 1] #treatment group
-  esize_1 <- esc_B(model1ES$coefficients[2], SD_Y, t1, control)
-  es_1 <- esize_1$es
-  return(c(es_1))
-})
-
-pooled_effects_child <- function(){
-  fr <- t(data.frame(cohensd_interact))
-  m1 <- mean(fr[1:5])
-  return(c(m1))
-}
-effectsizes_child <- pooled_effects_child()
-
 
 
 
@@ -388,52 +503,6 @@ total_models <- subset(total_models, select = -c(statistic.x, df.x, statistic.y,
 
 #Predictions from Model 3
   #Difference between constellations
-
-#Pool marginal effects
-predictions <- lapply(1:5, function(i) {
-  m <- lm_robust(cohesion ~ factor(combinations)
-                 + age_child + factor(sharedchild) + factor(combinations):factor(parttime) + factor(parttime) +
-                   female_child  + age_parent + female_respondent + educ_par + 
-                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
-  ggpredict(m, "combinations")
-})
-predictions <- pool_predictions(predictions)
-
-#Plot
-p1 <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
-  geom_bar(stat="identity", fill="white", color='black')+ 
-  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
-  labs(title = "Stepfamily Cohesion, by Stepfamily Constellation", 
-       x = "Stepfamily constellation", y = "Predicted stepfamily cohesion") +
-  scale_x_discrete(labels = c('Resident biological child, \n no stepchild', 
-                              'Resident biological child & \n resident stepchild',
-                              '(Non)resident \n biological child & \n (non)resident \n stepchild')) +
-  ylim(0,5) +
-  theme(plot.title=element_text(hjust=0.5))
-p1
-
-#Predictions for shared child
-predictions <- lapply(1:5, function(i) {
-  m <- lm_robust(cohesion ~ factor(combinations)
-                 + age_child + factor(sharedchild) + factor(combinations):factor(parttime) + factor(parttime) +
-                   female_child  + age_parent + female_respondent + educ_par + 
-                   age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
-  ggpredict(m, "sharedchild")
-})
-predictions <- pool_predictions(predictions)
-
-
-
-p2 <- ggplot(data=predictions, aes(x=factor(x), y=predicted)) +
-  geom_bar(stat="identity", fill="white", color='black')+ 
-  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
-  labs(title = 'Stepfamily Cohesion by Shared Biological Child',
-       x = "Having a shared child", y = "Predicted stepfamily cohesion") +
-  scale_x_discrete(labels = c('No shared child', 
-                              'Shared child')) +
-  ylim(0,5) +
-  theme(plot.title=element_text(hjust=0.5))
-p2
 
 
 
