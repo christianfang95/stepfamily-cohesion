@@ -1,27 +1,3 @@
-
-#library(reticulate)#
-
-#use_python("~/Library/r-miniconda-arm64/bin/python3.9")
-#py_install("pandas")
-
-#Run file
-#py_run_file("/Users/christianfang/GitHub/stepfamily-cohesion/data cleaning/data_cleaning.py")
-#data <- py$frame
-
-#frame <- data.frame(data)
-
-
-
-
-#arr = py_to_r(py$arr)
-#frame <- data$T
-
-#arr = py_to_r(frame)
-
-#df <- data.frame(arr)
-
-#df <- py_to_r.pandas.core.frame.DataFrame(data)
-
 library(mice)
 library(ggeffects)
 library(ggpubr)
@@ -32,6 +8,9 @@ library(ggeffects)
 library(estimatr)
 library(esc)
 library(ltm)
+options(scipen=999)
+library("margins")
+
 #Import data as csv
 
 raw <- data.frame(read.csv('/Volumes/webdav.uu.nl/Data/Research/FSW/Research_data/SOC/Anne-Rigt Poortman/Nieuwe Families NL/Zielinski/Cohesion paper/data_cleaned.csv'))
@@ -45,9 +24,12 @@ data <- dplyr::select(raw, CBSvolgnr_hh, cohes_a, cohes_b, cohes_c, cohes_d, coh
                       sharedchild, parttime, age_child, female_child, age_parent, 
                       female_respondent, duration, educ_par, educ_partner, age_partner, A3J02, A3J29, A3P12)
 
+
 #Check which variables have missing values
 sapply(data, function(x) sum(is.na(x)))
-
+       
+#Dummy variable for cohesion
+data$cohes_dummy <- ifelse(data$cohesion > 3, 1, 0)
 
 #Multiple imputations
 impute_data <- function(original_data){
@@ -60,6 +42,7 @@ impute_data <- function(original_data){
   method[c("cohes_b")]="cart"
   method[c("cohes_c")]="cart"
   method[c("cohes_d")]="cart"
+  method[c("cohes_dummy")]="cart"
   method[c("sharedchild")]="cart"
   method[c("female_child")]="cart"
   method[c("duration")]="cart"
@@ -75,7 +58,6 @@ impute_data <- function(original_data){
   return(imputed)}
 
 imputed <- impute_data(data)
-
 
 #Check imputations, seems OK
 densityplot(imputed)
@@ -135,6 +117,8 @@ summary_table <- function(){
                  female_child_b, age_parent_b, female_respondent_b, educ_par_b, age_partner_b, educ_partner_b,
                  duration_b, relqual_child_b, rel_child_step_b,  rel_partner_b)
   #After imputation
+  cohesion_a <- list(mean(impL$cohesion, na.rm = TRUE), min(impL$cohesion, na.rm = TRUE), 
+                     max(impL$cohesion, na.rm = TRUE), sd(impL$cohesion, na.rm = TRUE))
   resnostep_a <- list(sum(impL$combinations == 0)/length(impL$combinations), min(impL$combinations, na.rm = TRUE),
                       max(impL$combinations, na.rm = TRUE), '')
   resres_a <- list(sum(impL$combinations == 1)/length(impL$combinations), min(impL$combinations == 1, na.rm = TRUE),
@@ -199,7 +183,6 @@ summary_table <- function(){
   frame_a$ID <- rownames(frame_a)
   total <- merge(frame_b, frame_a, by = 'ID')
   return(total)}
-
 total = summary_table()
 
 #Calculate alpha for cohesion
@@ -211,9 +194,51 @@ alpha <- lapply(1:5, function(i){
 alpha <- mean(alpha[[1]]$alpha, alpha[[2]]$alpha, alpha[[3]]$alpha, alpha[[4]]$alpha, alpha[[5]]$alpha)
 
 #store number of former households  
-nformerhh <- length(unique(complete$CBSvolgnr_hh))
+nformerhh <- length(unique(complete(imputed)$CBSvolgnr_hh))
 
-#Histogram of cohesion
+#Bar plots of subdimensions of cohesion
+cohes_values <- lapply(1:5, function(i){
+  complete <- complete(imputed, action = i) 
+  means <- c(mean(complete$cohes_a), mean(complete$cohes_b), mean(complete$cohes_c), mean(complete$cohes_d))
+  ses <- c(std.error(complete$cohes_a), std.error(complete$cohes_b), std.error(complete$cohes_c), std.error(complete$cohes_d))
+  return(c(means, ses))
+})
+cohes_frame <- data.frame(t(data.frame(cohes_values)))
+colnames(cohes_frame) <- c("cohes_a", "cohes_b", "cohes_c", "cohes_d", "se_cohes_a", "se_cohes_b", "se_cohes_c", "se_cohes_d")
+cohes_frame <- t(data.frame(colMeans(cohes_frame)))
+melted1 <- melt(cohes_frame[, c("cohes_a", "cohes_b", "cohes_c", "cohes_d")], id.vars = c("cohes_a", "cohes_b", "cohes_c", "cohes_d"))
+melted2 <- melt(cohes_frame[, c( "se_cohes_a", "se_cohes_b", "se_cohes_c", "se_cohes_d")], id.vars = c( "se_cohes_a", "se_cohes_b", "se_cohes_c", "se_cohes_d"))
+rownames(melted2) <- c("cohes_a", "cohes_b", "cohes_c", "cohes_d")
+melt <- cbind(melted1, melted2)
+colnames(melt) <- c("mean", "se")
+
+barplot <- ggplot(melt, aes(x = rownames(melt), y = mean)) +
+           geom_bar(position = 'dodge', stat='identity',  fill="white", color='black') +
+           geom_errorbar(aes(x=rownames(melt), ymin=mean-1.96*se, ymax=mean+1.96*se, width=.1)) +
+           xlab(' ') +
+           ylab('Mean') +
+           ggtitle('Means of Subdimensions of Stepfamily Cohesion') +
+           theme(plot.title = element_text(hjust = 0.5)) +
+           scale_x_discrete(labels = c('Having close \n relationships ', 
+                                       'Keeping each other \n informed',
+                                       'More disjoint than unit \n (reversed)', 
+                                      'Very involved'))
+
+barplot
+
+#Factor analysis on the cohesion items -> do they load onto the same components?
+completed1 <- complete(imputed, action = 5)
+completed1 <- completed1[c('cohes_a', 'cohes_b', 'cohes_c', 'cohes_d')]
+fit <- princomp(completed1, cor=TRUE)
+summary(fit) # print variance accounted for 
+loadings(fit) # pc loadings 
+plot(fit,type="lines") # scree plot 
+#Suggests that a two-factor solution might be best, though factor 1 already captures 73% of the variation
+#To me, that suggests that just using one scale is a defensible option.
+
+
+
+#Histogram of cohesion overall
 
 histogram <- function(){
   merged <- merge_imputations(data, imputed)
@@ -241,21 +266,228 @@ histogram <- function(){
 
 }
 
-
 h <- histogram()
 h
 
+#calculate skewness of the DV
+install.packages("moments")
+library(moments)
+skew <- lapply(1:5, function(i){
+  complete <- complete(imputed, action = i)
+  skew <- skewness(complete$cohesion)
+})
+skweness()
+
+#Run logistic regression
+logit <- lapply(1:5, function(i){
+  complete <- complete(imputed, action = i)
+  logit <- glm(cohes_dummy ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+               + age_child + 
+                 female_child  + age_parent + female_respondent + educ_par + 
+                 age_partner + educ_partner + duration# + A3J02 + A3J29 + A3P12
+               , family = "binomial", data = complete)
+  margins <- margins(logit)
+  return(margins)
+})
+
+
+logit_margins <- function(){
+  p <-round(((summary(logit[[1]])[['p']] + summary(logit[[2]])[['p']] + summary(logit[[3]])[['p']] + summary(logit[[4]])[['p']] + summary(logit[[5]])[['p']])/5), 3)
+  est <-round(((summary(logit[[1]])[['AME']] + summary(logit[[2]])[['AME']] + summary(logit[[3]])[['AME']] + summary(logit[[4]])[['AME']] + summary(logit[[5]])[['AME']])/5), 3)
+  SE <-round(((summary(logit[[1]])[['SE']] + summary(logit[[2]])[['SE']] + summary(logit[[3]])[['SE']] + summary(logit[[4]])[['SE']] + summary(logit[[5]])[['SE']])/5), 3)
+  names <- summary(logit[[1]])['factor']
+  df <- data.frame(list(names, est, SE, p))
+  names(df) <- c("factor", 'AME', "SE", "p-value")
+    return(df)
+}
+
+logit_margins <- logit_margins()
+
+#Examine predicted probabilities
+predicted_values <- lapply(1:5, function(i){
+  complete <- complete(imputed, action = i)
+  logit <- glm(cohes_dummy ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+               + age_child + 
+                 female_child  + age_parent + female_respondent + educ_par + 
+                 age_partner + educ_partner + duration #+ A3J02 + A3J29 + A3P12
+               , family = "binomial", data = complete)
+  preds <- logit$fitted.values
+  df <- data.frame(preds)
+  return(df)
+})
+
+preds_raw <- lapply(1:5, function(i){
+  complete <- complete(imputed, action = i)
+  logit <- glm(cohes_dummy ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+               + age_child + 
+                 female_child  + age_parent + female_respondent + educ_par + 
+                 age_partner + educ_partner + duration #+ #A3J02 + A3J29 + A3P12
+                 , family = "binomial", data = complete)
+  y <- logit$y
+  df <- data.frame(y)
+  return(df)
+})
+
+
+preds <- (predicted_values[[1]] + predicted_values[[2]] + predicted_values[[3]] +
+            predicted_values[[4]] + predicted_values[[5]])/5
+
+preds_ols <- with(imputed, lm(cohesion ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+                              + age_child + 
+                                female_child  + age_parent + female_respondent + educ_par + 
+                                age_partner + educ_partner + duration #+ A3J02 + A3J29 + A3P12
+                              ))
+
+
+preds$OLS <- (preds_ols[["analyses"]][[1]][["fitted.values"]] +
+preds_ols[["analyses"]][[2]][["fitted.values"]] +
+preds_ols[["analyses"]][[3]][["fitted.values"]] +
+preds_ols[["analyses"]][[4]][["fitted.values"]] +
+preds_ols[["analyses"]][[5]][["fitted.values"]]) /5
+
+
+preds_lpm <- with(imputed, lm(cohes_dummy ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+                              + age_child + 
+                                female_child  + age_parent + female_respondent + educ_par + 
+                                age_partner + educ_partner + duration #+ #A3J02 + A3J29 + A3P12
+                                ))
+
+preds$LPM <- (preds_lpm[["analyses"]][[1]][["fitted.values"]] +
+                preds_lpm[["analyses"]][[2]][["fitted.values"]] +
+                preds_lpm[["analyses"]][[3]][["fitted.values"]] +
+                preds_lpm[["analyses"]][[4]][["fitted.values"]] +
+                preds_lpm[["analyses"]][[5]][["fitted.values"]]) /5
+
+
+preds$raw <- (preds_ols[["analyses"]][[1]][["model"]][["cohesion"]] +
+                preds_ols[["analyses"]][[2]][["model"]][["cohesion"]] +
+                preds_ols[["analyses"]][[3]][["model"]][["cohesion"]] +
+                preds_ols[["analyses"]][[4]][["model"]][["cohesion"]] +
+                preds_ols[["analyses"]][[5]][["model"]][["cohesion"]]) /5
+
+preds$raw_dummy <- round(((preds_raw[[1]] +
+                    preds_raw[[2]] +
+                    preds_raw[[3]] +
+                    preds_raw[[4]] +
+                    preds_raw[[5]]) /5), 0)
+
+
+#Quantitle regression
+library(quantreg)
+
+preds_quantreg <-lapply(1:5, function(i){
+  c <- complete(imputed, action = i)
+  qr <- rq(cohesion ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+           + age_child + 
+             female_child  + age_parent + female_respondent + educ_par + 
+             age_partner + educ_partner + duration #+ A3J02 + A3J29 + A3P12
+           ,
+           data = c)
+  return(qr)
+}) 
+
+preds$quantreg <- (preds_quantreg[[1]][["fitted.values"]] +
+                  preds_quantreg[[2]][["fitted.values"]] +
+                  preds_quantreg[[3]][["fitted.values"]] +
+                  preds_quantreg[[4]][["fitted.values"]] +
+                  preds_quantreg[[5]][["fitted.values"]]) / 5
+
+
+plot(preds$OLS, preds$preds)
+
+
+olslogit <- ggplot(preds, aes(x=OLS, y=preds))+
+  geom_point()+
+  geom_smooth(method=loess, se=TRUE) +
+  xlim(0,5) +
+  ylim(0,1) +
+  labs(title = 'OLS ŷ vs. Logistic Regression Pr(Y=1)', x='OLS ŷ', y='Logistic Regression Pr(Y=1)') +
+  theme(plot.title=element_text(hjust=0.5))
+
+olsqr <- ggplot(preds, aes(x=OLS, y=quantreg))+
+  geom_point()+
+  geom_smooth() +
+  xlim(1,5) +
+  ylim(1,5) +
+  labs(title = 'OLS ŷ vs. Quantile Regression ŷ', 
+       x='OLS ŷ', y='Quantile regression ŷ') +
+  theme(plot.title=element_text(hjust=0.5))
+
+
+olsraw <- ggplot(preds, aes(x=OLS, y=raw))+
+  geom_point()+
+  geom_smooth(method=loess, se=TRUE) +
+  xlim(1,5) +
+  ylim(1,5) +
+  labs(title = 'OLS  ŷ vs. Y', x = 'OLS ŷ', y = 'Y') +
+  theme(plot.title=element_text(hjust=0.5))
+
+logitraw <-ggplot(preds, aes(x=raw_dummy$y, y=preds))+
+  geom_jitter(width = 0.05, height = 0.1)+
+  xlim(0,1) +
+  ylim(0,1) +
+  labs(title = 'Logistic Regression Pr(Y=1) vs. Y', x = 'Y', y = 'Logistic Regression Pr(Y=1)') +
+  theme(plot.title=element_text(hjust=0.5))
+
+lpm <- ggplot(preds, aes(x=raw_dummy$y, y=LPM))+
+  geom_jitter(width = 0.05, height = 0.1)+
+  xlim(0,1) +
+  ylim(0,1.2) +
+  labs(title = 'LPM (OLS) Pr(Y=1) vs. Y', x = 'Y', y = 'LPM Pr(Y=1)') +
+  theme(plot.title=element_text(hjust=0.5))
+
+plot_grid(olsraw, logitraw, lpm, olslogit, olsqr)
+
 
 #Run regressions
-options(scipen=999)
 model1 <- with(imputed, lm_robust(cohesion ~ factor(combinations)
                                    + age_child + 
                                     female_child  + age_parent + female_respondent + educ_par + 
                                     age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12 , clusters = CBSvolgnr_hh))
+
 model1 <- pool(model1)
 summary(model1)
+plot(model1)
 pool.r.squared(model1)
 pool.r.squared(model1, adjusted = TRUE)
+
+#
+
+#Check assumptions
+model1_assumptions <- lapply(1:5, function(i){
+  dat <- complete(imputed, action = i)
+  model1 <- lm(cohesion ~ factor(combinations)
+                     + age_child + 
+                       female_child  + age_parent + female_respondent + educ_par + 
+                       age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12,
+                     data = dat)
+  residuals <- model1$residuals
+  fitted <- model1$fitted.values
+  df <- data.frame(residuals, fitted)
+  return(df)
+})
+
+assumptions_model1 <- (model1_assumptions[[1]]+model1_assumptions[[2]]+model1_assumptions[[3]]+model1_assumptions[[4]]+model1_assumptions[[5]])/5
+
+ggplot(assumptions_model1, aes(x=fitted, y=residuals))+
+  geom_point()+
+  geom_smooth(method=loess, se=FALSE)
+
+#Examine predicted values
+
+
+
+
+normality <- data.frame(model1_assumptions)
+
+dat <- complete(imputed, action = 1)
+model1 <- lm(cohesion ~ factor(combinations)
+             + age_child + 
+               female_child  + age_parent + female_respondent + educ_par + 
+               age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12,
+             data = dat)
+
+plot(residuals, fitted)
 
 #Calculate effect sizes
 cohensd <- lapply(1:5, function(i) {
