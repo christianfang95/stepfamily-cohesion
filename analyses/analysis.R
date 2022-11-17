@@ -8,8 +8,11 @@ library(ggeffects)
 library(estimatr)
 library(esc)
 library(ltm)
+library(dplyr)
 options(scipen=999)
 library("margins")
+library(plotrix)
+library(reshape2)
 
 #Import data as csv
 
@@ -18,11 +21,30 @@ raw$cohesion <- (raw$cohes_a + raw$cohes_b + raw$cohes_c + raw$cohes_d) / 4
 
 mean_before <- mean(raw$cohesion, na.rm = TRUE)
 
+#Make residence variables
+#Biochild
+raw$biores <- raw$A3I08
+raw$biores <- na_if(raw$biores, 98)
+raw$biores <- recode(raw$biores, `1` = 1L, `2` = 2L, `3` = 3L, `4` = 2L)
+#Presence stepchild
+raw$step <- raw$A3L06
+raw$step <- recode(raw$step, `1` = 1L, `2` = 0L)
+#Stepchild residence
+raw$stepres <- raw$A3P10
+raw$stepres <- na_if(raw$stepres, 98)
+raw$stepres <- recode(raw$stepres, `1` = 1L, `2` = 2L, `3` = 3L, `4` = 2L)
+raw$stepres <- case_when(raw$step == 0 ~ 0, 
+                         raw$stepres == 1 ~ 1,
+                         raw$stepres == 2 ~ 2, 
+                         raw$stepres == 3 ~ 3)
+
+
+
 #Select only relevant variables
 
 data <- dplyr::select(raw, CBSvolgnr_hh, cohes_a, cohes_b, cohes_c, cohes_d, cohesion, combinations, 
                       sharedchild, parttime, age_child, female_child, age_parent, 
-                      female_respondent, duration, educ_par, educ_partner, age_partner, A3J02, A3J29, A3P12)
+                      female_respondent, duration, educ_par, educ_partner, age_partner, A3J02, A3J29, A3P12, biores, stepres, step)
 
 
 #Check which variables have missing values
@@ -38,6 +60,9 @@ impute_data <- function(original_data){
   predictor_matrix[,c("CBSvolgnr_hh")]=0
   method<-imp$method
   method[c("CBSvolgnr_hh")]=""
+  method[c("biores")]="cart"
+  method[c("stepres")]="cart"
+  method[c("step")]="cart"
   method[c("cohes_a")]="cart"
   method[c("cohes_b")]="cart"
   method[c("cohes_c")]="cart"
@@ -217,6 +242,7 @@ barplot <- ggplot(melt, aes(x = rownames(melt), y = mean)) +
            geom_errorbar(aes(x=rownames(melt), ymin=mean-1.96*se, ymax=mean+1.96*se, width=.1)) +
            xlab(' ') +
            ylab('Mean') +
+           ylim(0,5)+
            ggtitle('Means of Subdimensions of Stepfamily Cohesion') +
            theme(plot.title = element_text(hjust = 0.5)) +
            scale_x_discrete(labels = c('Having close \n relationships ', 
@@ -440,7 +466,7 @@ plot_grid(olsraw, logitraw, lpm, olslogit, olsqr)
 
 
 #Run regressions
-model1 <- with(imputed, lm_robust(cohesion ~ factor(combinations)
+model1 <- with(imputed, lm_robust(cohesion ~ factor(stepres) + factor(biores)
                                    + age_child + 
                                     female_child  + age_parent + female_respondent + educ_par + 
                                     age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12 , clusters = CBSvolgnr_hh))
