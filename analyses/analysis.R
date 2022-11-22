@@ -304,6 +304,75 @@ skew <- lapply(1:5, function(i){
 })
 skweness()
 
+#Model 1a: Stepchild + Biochild, no qualities
+
+m1a <- with(imputed, lm_robust(cohesion ~ factor(step) + factor(sharedchild) +
+                              age_child + female_child  + age_parent + female_respondent + 
+                              educ_par + age_partner + educ_partner + duration ,
+                               clusters = CBSvolgnr_hh))
+m1a <- pool(m1a)
+m1a <- summary(m1a)
+pool.r.squared(with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
+                                  age_child + female_child  + age_parent + female_respondent + 
+                                  educ_par + age_partner + educ_partner + duration)))
+
+#Model 1b: Stepchild + biochild, controls
+m1b <- with(imputed, lm_robust(cohesion ~ factor(step) + factor(sharedchild) +
+                              age_child + female_child  + age_parent + female_respondent + 
+                              educ_par + age_partner + educ_partner + duration + 
+                              A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
+m1b <- pool(m1b)
+m1b <- summary(m1b)
+pool.r.squared(with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
+                                         age_child + female_child  + age_parent + female_respondent + 
+                                         educ_par + age_partner + educ_partner + duration + 
+                                         A3J02 + A3J29 + A3P12)))
+#Model 2a: residence, no control
+m2a <- with(imputed, lm_robust(cohesion ~ factor(biores) + factor(stepres) +
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration,
+                               clusters = CBSvolgnr_hh))
+m2a <- pool(m2a)
+m2a <- summary(m2a)
+
+#Model 2b: residence, controls
+m2b <- with(imputed, lm_robust(cohesion ~ factor(biores) + factor(stepres)+
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration + 
+                                 A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
+m2b <- pool(m2b)
+m2b <- summary(m2b)
+
+#Model 3a: combinations, no controls
+m3a <- with(imputed, lm_robust(cohesion ~ factor(combinations) +
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration, clusters = CBSvolgnr_hh))
+m3a <- pool(m3a)
+m3a <- summary(m3a)
+pool.r.squared(with(imputed, lm(cohesion ~ factor(combinations)+
+                                  age_child + female_child  + age_parent + female_respondent + 
+                                  educ_par + age_partner + educ_partner + duration)))
+
+
+#Model 3b: combinations,  controls
+m3b <- with(imputed, lm_robust(cohesion ~ factor(combinations)+
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration + 
+                                 A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
+m3b <- pool(m3b)
+m3b <- summary(m3b)
+pool.r.squared(with(imputed, lm(cohesion ~ factor(combinations)+
+                                         age_child + female_child  + age_parent + female_respondent + 
+                                         educ_par + age_partner + educ_partner + duration + 
+                                         A3J02 + A3J29 + A3P12)))
+ 
+
+
+
+
+
+
+
 #Run logistic regression
 logit <- lapply(1:5, function(i){
   complete <- complete(imputed, action = i)
@@ -659,11 +728,11 @@ age <- pooled_effects_age()
 #PLOTS
 #Pool marginal effects
 predictions <- lapply(1:5, function(i) {
-  m <- lm_robust(cohesion ~ factor(combinations)
-                 + age_child + factor(sharedchild) + factor(parttime) +
+  m <- lm_robust(cohesion ~ factor(stepres) + factor(biores)
+                 + age_child + factor(sharedchild) +
                    female_child  + age_parent + female_respondent + educ_par + 
                    age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
-  ggpredict(m, "combinations")
+  ggpredict(m, "biores")
 })
 predictions <- pool_predictions(predictions)
 
@@ -724,8 +793,8 @@ p2
 
 #Model 3
 
-model3 <- with(imputed, lm_robust(cohesion ~ factor(combinations) + sharedchild + factor(parttime)
-                                  + age_child + 
+model3 <- with(imputed, lm_robust(cohesion ~ factor(stepres) + factor(biores)
+                                  + age_child + factor(sharedchild) +
                                     female_child  + age_parent + female_respondent + educ_par + 
                                     age_partner + educ_partner + duration + A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
 model3 <- pool(model3)
