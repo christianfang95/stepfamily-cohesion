@@ -328,7 +328,7 @@ pool.r.squared(with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
                                          educ_par + age_partner + educ_partner + duration + 
                                          A3J02 + A3J29 + A3P12)))
 #Model 2a: residence, no control
-m2a <- with(imputed, lm_robust(cohesion ~ factor(biores) + factor(stepres) +
+m2a <- with(imputed, lm_robust(cohesion ~ relevel(factor(biores), ref = '2') + relevel(factor(stepres), ref = '2') +
                                  age_child + female_child  + age_parent + female_respondent + 
                                  educ_par + age_partner + educ_partner + duration,
                                clusters = CBSvolgnr_hh))
@@ -336,12 +336,13 @@ m2a <- pool(m2a)
 m2a <- summary(m2a)
 
 #Model 2b: residence, controls
-m2b <- with(imputed, lm_robust(cohesion ~ factor(biores) + factor(stepres)+
+m2b <- with(imputed, lm_robust(cohesion ~ relevel(factor(biores), ref = '2') + relevel(factor(stepres), ref = '2')+
                                  age_child + female_child  + age_parent + female_respondent + 
                                  educ_par + age_partner + educ_partner + duration + 
                                  A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
 m2b <- pool(m2b)
 m2b <- summary(m2b)
+m2b
 
 #Model 3a: combinations, no controls
 m3a <- with(imputed, lm_robust(cohesion ~ factor(combinations) +
@@ -401,7 +402,7 @@ logit_margins <- logit_margins()
 #Examine predicted probabilities
 predicted_values <- lapply(1:5, function(i){
   complete <- complete(imputed, action = i)
-  logit <- glm(cohes_dummy ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+  logit <- glm(cohes_dummy ~ factor(combinations) 
                + age_child + 
                  female_child  + age_parent + female_respondent + educ_par + 
                  age_partner + educ_partner + duration #+ A3J02 + A3J29 + A3P12
@@ -413,10 +414,10 @@ predicted_values <- lapply(1:5, function(i){
 
 preds_raw <- lapply(1:5, function(i){
   complete <- complete(imputed, action = i)
-  logit <- glm(cohes_dummy ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+  logit <- glm(cohes_dummy ~ factor(combinations) 
                + age_child + 
                  female_child  + age_parent + female_respondent + educ_par + 
-                 age_partner + educ_partner + duration #+ #A3J02 + A3J29 + A3P12
+                 age_partner + educ_partner + duration #+ A3J02 + A3J29 + A3P12
                  , family = "binomial", data = complete)
   y <- logit$y
   df <- data.frame(y)
@@ -427,7 +428,7 @@ preds_raw <- lapply(1:5, function(i){
 preds <- (predicted_values[[1]] + predicted_values[[2]] + predicted_values[[3]] +
             predicted_values[[4]] + predicted_values[[5]])/5
 
-preds_ols <- with(imputed, lm(cohesion ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+preds_ols <- with(imputed, lm(cohesion ~ factor(combinations) 
                               + age_child + 
                                 female_child  + age_parent + female_respondent + educ_par + 
                                 age_partner + educ_partner + duration #+ A3J02 + A3J29 + A3P12
@@ -441,10 +442,10 @@ preds_ols[["analyses"]][[4]][["fitted.values"]] +
 preds_ols[["analyses"]][[5]][["fitted.values"]]) /5
 
 
-preds_lpm <- with(imputed, lm(cohes_dummy ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+preds_lpm <- with(imputed, lm(cohes_dummy ~ factor(combinations) 
                               + age_child + 
                                 female_child  + age_parent + female_respondent + educ_par + 
-                                age_partner + educ_partner + duration #+ #A3J02 + A3J29 + A3P12
+                                age_partner + educ_partner + duration #+ A3J02 + A3J29 + A3P12
                                 ))
 
 preds$LPM <- (preds_lpm[["analyses"]][[1]][["fitted.values"]] +
@@ -472,7 +473,7 @@ library(quantreg)
 
 preds_quantreg <-lapply(1:5, function(i){
   c <- complete(imputed, action = i)
-  qr <- rq(cohesion ~ factor(combinations) + factor(sharedchild) + factor(parttime)
+  qr <- rq(cohesion ~ factor(combinations)
            + age_child + 
              female_child  + age_parent + female_respondent + educ_par + 
              age_partner + educ_partner + duration #+ A3J02 + A3J29 + A3P12
@@ -496,7 +497,7 @@ olslogit <- ggplot(preds, aes(x=OLS, y=preds))+
   geom_smooth(method=loess, se=TRUE) +
   xlim(0,5) +
   ylim(0,1) +
-  labs(title = 'OLS ŷ vs. Logistic Regression Pr(Y=1)', x='OLS ŷ', y='Logistic Regression Pr(Y=1)') +
+  labs(title = 'OLS ŷ vs. LR Pr(Y=1)', x='OLS ŷ', y='LR Pr(Y=1)') +
   theme(plot.title=element_text(hjust=0.5))
 
 olsqr <- ggplot(preds, aes(x=OLS, y=quantreg))+
@@ -504,8 +505,8 @@ olsqr <- ggplot(preds, aes(x=OLS, y=quantreg))+
   geom_smooth() +
   xlim(1,5) +
   ylim(1,5) +
-  labs(title = 'OLS ŷ vs. Quantile Regression ŷ', 
-       x='OLS ŷ', y='Quantile regression ŷ') +
+  labs(title = 'OLS ŷ vs. QR ŷ', 
+       x='OLS ŷ', y='QR ŷ') +
   theme(plot.title=element_text(hjust=0.5))
 
 
@@ -517,11 +518,19 @@ olsraw <- ggplot(preds, aes(x=OLS, y=raw))+
   labs(title = 'OLS  ŷ vs. Y', x = 'OLS ŷ', y = 'Y') +
   theme(plot.title=element_text(hjust=0.5))
 
+qrraw <- ggplot(preds, aes(x=quantreg, y=raw))+
+  geom_point()+
+  geom_smooth(method=loess, se=TRUE) +
+  xlim(1,5) +
+  ylim(1,5) +
+  labs(title = 'QR  ŷ vs. Y', x = 'QR ŷ', y = 'Y') +
+  theme(plot.title=element_text(hjust=0.5))
+
 logitraw <-ggplot(preds, aes(x=raw_dummy$y, y=preds))+
   geom_jitter(width = 0.05, height = 0.1)+
   xlim(0,1) +
   ylim(0,1) +
-  labs(title = 'Logistic Regression Pr(Y=1) vs. Y', x = 'Y', y = 'Logistic Regression Pr(Y=1)') +
+  labs(title = 'LR Pr(Y=1) vs. Y', x = 'Y', y = 'LR Pr(Y=1)') +
   theme(plot.title=element_text(hjust=0.5))
 
 lpm <- ggplot(preds, aes(x=raw_dummy$y, y=LPM))+
@@ -531,7 +540,10 @@ lpm <- ggplot(preds, aes(x=raw_dummy$y, y=LPM))+
   labs(title = 'LPM (OLS) Pr(Y=1) vs. Y', x = 'Y', y = 'LPM Pr(Y=1)') +
   theme(plot.title=element_text(hjust=0.5))
 
-plot_grid(olsraw, logitraw, lpm, olslogit, olsqr)
+plot_grid(olsraw, qrraw, olsqr, logitraw, lpm, olslogit)
+
+
+
 
 
 #Run regressions
