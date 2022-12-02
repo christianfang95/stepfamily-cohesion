@@ -13,6 +13,7 @@ options(scipen=999)
 library("margins")
 library(plotrix)
 library(reshape2)
+library(patchwork)
 
 #Import data as csv
 
@@ -295,6 +296,36 @@ histogram <- function(){
 h <- histogram()
 h
 
+#histogram relationship qualities
+merged <- merge_imputations(data, imputed)
+
+child <- gghistogram(data = merged, x = 'A3J02', bins = 10, ylab = 'Count', 
+                     xlab = 'Relationship quality child', 
+                     title = 'Relationship quality child') 
+partner_child <- gghistogram(data = merged, x = 'A3J29', bins = 10, ylab = 'Count', 
+                       xlab = 'Relationship quality partner-child',
+                       title = 'Relationship quality partner-child') 
+partner <- gghistogram(data = merged, x = 'A3P12', bins = 10, ylab = 'Count', 
+                             xlab = 'Relationship quality partner',
+                       title = 'Relationship quality partner') 
+
+child + partner + partner_child
+
+gghistogram(data = merged, x = 'cohes_a', bins = 5, ylab = 'Count', 
+            xlab = 'cohes_a', 
+            title = 'cohes_a') 
+gghistogram(data = merged, x = 'cohes_b', bins = 5, ylab = 'Count', 
+            xlab = 'cohes_b', 
+            title = 'cohes_b') 
+gghistogram(data = merged, x = 'cohes_c', bins = 5, ylab = 'Count', 
+            xlab = 'cohes_c', 
+            title = 'cohes_c') 
+gghistogram(data = merged, x = 'cohes_d', bins = 5, ylab = 'Count', 
+            xlab = 'cohes_d', 
+            title = 'cohes_d') 
+
+
+
 #calculate skewness of the DV
 install.packages("moments")
 library(moments)
@@ -327,6 +358,17 @@ pool.r.squared(with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
                                          age_child + female_child  + age_parent + female_respondent + 
                                          educ_par + age_partner + educ_partner + duration + 
                                          A3J02 + A3J29 + A3P12)))
+
+
+#check for interactions with duration
+m1b_interact <- with(imputed, lm_robust(cohesion ~ factor(step)*duration + factor(sharedchild)*duration +
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration + 
+                                 A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
+m1b_interact <- pool(m1b_interact)
+m1b_interact <- summary(m1b_interact)
+m1b_interact
+
 #Model 2a: residence, no control
 m2a <- with(imputed, lm_robust(cohesion ~ relevel(factor(biores), ref = '2') + relevel(factor(stepres), ref = '2') +
                                  age_child + female_child  + age_parent + female_respondent + 
