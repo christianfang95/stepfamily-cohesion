@@ -17,42 +17,58 @@ library(patchwork)
 
 #Import data as csv
 
-raw <- data.frame(read.csv('/Volumes/webdav.uu.nl/Data/Research/FSW/Research_data/SOC/Anne-Rigt Poortman/Nieuwe Families NL/Zielinski/Cohesion paper/data_cleaned.csv'))
+raw <- data.frame(read.csv('/Users/christianfang/Downloads/data_cleaned.csv'))
 raw$cohesion <- (raw$cohes_a + raw$cohes_b + raw$cohes_c + raw$cohes_d) / 4
 
 mean_before <- mean(raw$cohesion, na.rm = TRUE)
 
+#Recode nonresident 
+raw$resbiochild_nonres_recode <- recode(raw$resbiochild, '1' = 1L, '2' = 2L, '3' = 3L, '4' = 2L)
+
+
 #Make residence variables
 #Biochild
-raw$biores <- raw$A3I08
-raw$biores <- na_if(raw$biores, 98)
-raw$biores <- recode(raw$biores, `1` = 1L, `2` = 2L, `3` = 3L, `4` = 2L)
+#raw$biores <- raw$A3I08
+#raw$biores <- na_if(raw$biores, 98)
+#raw$biores <- recode(raw$biores, `1` = 1L, `2` = 2L, `3` = 3L, `4` = 2L)
 #Presence stepchild
-raw$step <- raw$A3L06
-raw$step <- recode(raw$step, `1` = 1L, `2` = 0L)
+#raw$step <- raw$A3L06
+#raw$step <- recode(raw$step, `1` = 1L, `2` = 0L)
 #Stepchild residence
-raw$stepres <- raw$A3P10
-raw$stepres <- na_if(raw$stepres, 98)
-raw$stepres <- recode(raw$stepres, `1` = 1L, `2` = 2L, `3` = 3L, `4` = 2L)
-raw$stepres <- case_when(raw$step == 0 ~ 0, 
-                         raw$stepres == 1 ~ 1,
-                         raw$stepres == 2 ~ 2, 
-                         raw$stepres == 3 ~ 3)
+##raw$stepres <- raw$A3P10
+#raw$stepres <- na_if(raw$stepres, 98)
+#raw$stepres <- recode(raw$stepres, `1` = 1L, `2` = 2L, `3` = 3L, `4` = 2L)
+#raw$stepres <- case_when(raw$step == 0 ~ 0, 
+#                         raw$stepres == 1 ~ 1,
+#                         raw$stepres == 2 ~ 2, 
+#                         raw$stepres == 3 ~ 3)
 
+#Drop respondents if: stepres == 0 & biores == 2, stepres == 2 & biores == 2
+#raw$filter <- case_when(raw$stepres == 0 & raw$biores == 2 ~ 1,
+#                        raw$stepres == 2 & raw$biores == 2 ~ 1,
+#                        TRUE ~ 0)
+#length(raw[raw$filter == 0])
+#test_df <- filter(raw, filter == 0)
 
 
 #Select only relevant variables
 
-data <- dplyr::select(raw, CBSvolgnr_hh, cohes_a, cohes_b, cohes_c, cohes_d, cohesion, combinations, 
+data <- dplyr::select(raw, single, LAT, 
+                      CBSvolgnr_hh, cohes_a, cohes_b, cohes_c, cohes_d, cohesion,  
                       sharedchild, parttime, age_child, female_child, age_parent, 
-                      female_respondent, duration, educ_par, educ_partner, age_partner, A3J02, A3J29, A3P12, biores, stepres, step)
+                      female_respondent, duration, educ_par, educ_partner, age_partner, resbiochild_nonres_recode, resstepchild, resbiochild, step, relqual_child, relqual_partner, relqual_child_partner)
 
+#Exclude LAT and single people
+data <- data[data$single == 0,]
+data <- data[! is.na(data$single), ]
+n_singles_rem <- nrow(raw) - nrow(data)
+len <- nrow(data)
+data <- data[data$LAT == 0, ]
+data <- data[! is.na(data$LAT),]
+n_lat_rem <- len - nrow(data) 
 
 #Check which variables have missing values
 sapply(data, function(x) sum(is.na(x)))
-       
-#Dummy variable for cohesion
-data$cohes_dummy <- ifelse(data$cohesion > 3, 1, 0)
 
 #Multiple imputations
 impute_data <- function(original_data){
@@ -61,32 +77,37 @@ impute_data <- function(original_data){
   predictor_matrix[,c("CBSvolgnr_hh")]=0
   method<-imp$method
   method[c("CBSvolgnr_hh")]=""
-  method[c("biores")]="cart"
-  method[c("stepres")]="cart"
+  method[c("resbiochild")]="cart"
   method[c("step")]="cart"
+  method[c("resbiochild_nonres_recode")]="cart"
   method[c("cohes_a")]="cart"
   method[c("cohes_b")]="cart"
   method[c("cohes_c")]="cart"
   method[c("cohes_d")]="cart"
-  method[c("cohes_dummy")]="cart"
   method[c("sharedchild")]="cart"
   method[c("female_child")]="cart"
   method[c("duration")]="cart"
-  method[c("educ_par")]="cart"
   method[c("educ_partner")]="cart"
-  method[c("age_partner")]="cart"
   method[c("cohesion")]="cart"
-  method[c("A3J02")]="cart"
-  method[c("A3J29")]="cart"
-  method[c("A3P12")]="cart"
+  method[c("relqual_child")]="cart"
+  method[c("relqual_partner")]="cart"
+  method[c("relqual_child_partner")]="cart"
   
-  imputed <- mice(original_data, m=5, maxit=50, meth= method, seed=500,  predictorMatrix = predictor_matrix)
+  imputed <- mice(original_data, m=10, maxit=50, meth= method, seed=500,  predictorMatrix = predictor_matrix)
   return(imputed)}
 
 imputed <- impute_data(data)
+#Store copy
+imputed_ <- imputed
 
 #Check imputations, seems OK
 densityplot(imputed)
+
+# Make selections
+
+#Remove nonres bio child and no stepchild
+version1 <- filter(imputed, ! ((resbiochild_nonres_recode == 2) & (resstepchild == 2))) # Nonres-nonres out
+imputed <- filter(version1, ! ((resbiochild_nonres_recode == 2) & (resstepchild == 0))) #Nonres-no step out
 
 #Summary table for descriptive statistics
 summary_table <- function(){
@@ -218,6 +239,7 @@ alpha <- lapply(1:5, function(i){
   alpha <- cronbach.alpha(complete[c("cohes_a", "cohes_b", "cohes_c", "cohes_d")])
 })
 alpha <- mean(alpha[[1]]$alpha, alpha[[2]]$alpha, alpha[[3]]$alpha, alpha[[4]]$alpha, alpha[[5]]$alpha)
+alpha
 
 #store number of former households  
 nformerhh <- length(unique(complete(imputed)$CBSvolgnr_hh))
@@ -253,16 +275,6 @@ barplot <- ggplot(melt, aes(x = rownames(melt), y = mean)) +
 
 barplot
 
-#Factor analysis on the cohesion items -> do they load onto the same components?
-completed1 <- complete(imputed, action = 5)
-completed1 <- completed1[c('cohes_a', 'cohes_b', 'cohes_c', 'cohes_d')]
-fit <- princomp(completed1, cor=TRUE)
-summary(fit) # print variance accounted for 
-loadings(fit) # pc loadings 
-plot(fit,type="lines") # scree plot 
-#Suggests that a two-factor solution might be best, though factor 1 already captures 73% of the variation
-#To me, that suggests that just using one scale is a defensible option.
-
 
 
 #Histogram of cohesion overall
@@ -271,25 +283,8 @@ histogram <- function(){
   merged <- merge_imputations(data, imputed)
   # 1. Create the histogram plot
   phist <- gghistogram(
-    merged, x = "cohesion", bins=10, ylab = "Count", xlab = "Stepfamily cohesion")
-  
-  # 2. Create the density plot with y-axis on the right
-  # Remove x axis elements
-  pdensity <- ggdensity(
-    merged, x = "cohesion", 
-    alpha = 0, ylab = "Density") +
-    scale_y_continuous( position = "right")  +
-    theme_half_open(11, rel_small = 1) +
-    rremove("x.axis")+
-    rremove("xlab") +
-    rremove("x.text") +
-    rremove("x.ticks") +
-    rremove("legend") +
+    merged, x = "cohesion", bins=10, ylab = "Count", xlab = "Stepfamily cohesion") +
     labs(title = "Histogram and density of Stepfamily Cohesion")
-  
-  # 3. Align the two plots and then overlay them.
-  aligned_plots <- align_plots(phist, pdensity, align="hv", axis="tblr")
-  ggdraw(aligned_plots[[1]]) + draw_plot(aligned_plots[[2]])
 
 }
 
@@ -299,13 +294,13 @@ h
 #histogram relationship qualities
 merged <- merge_imputations(data, imputed)
 
-child <- gghistogram(data = merged, x = 'A3J02', bins = 10, ylab = 'Count', 
+child <- gghistogram(data = merged, x = 'relqual_child', bins = 10, ylab = 'Count', 
                      xlab = 'Relationship quality child', 
                      title = 'Relationship quality child') 
-partner_child <- gghistogram(data = merged, x = 'A3J29', bins = 10, ylab = 'Count', 
+partner_child <- gghistogram(data = merged, x = 'relqual_child_partner', bins = 10, ylab = 'Count', 
                        xlab = 'Relationship quality partner-child',
                        title = 'Relationship quality partner-child') 
-partner <- gghistogram(data = merged, x = 'A3P12', bins = 10, ylab = 'Count', 
+partner <- gghistogram(data = merged, x = 'relqual_partner', bins = 10, ylab = 'Count', 
                              xlab = 'Relationship quality partner',
                        title = 'Relationship quality partner') 
 
@@ -326,14 +321,6 @@ gghistogram(data = merged, x = 'cohes_d', bins = 5, ylab = 'Count',
 
 
 
-#calculate skewness of the DV
-install.packages("moments")
-library(moments)
-skew <- lapply(1:5, function(i){
-  complete <- complete(imputed, action = i)
-  skew <- skewness(complete$cohesion)
-})
-skweness()
 
 #Model 1a: Stepchild + Biochild, no qualities
 
@@ -343,6 +330,7 @@ m1a <- with(imputed, lm_robust(cohesion ~ factor(step) + factor(sharedchild) +
                                clusters = CBSvolgnr_hh))
 m1a <- pool(m1a)
 m1a <- summary(m1a)
+m1a
 pool.r.squared(with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
                                   age_child + female_child  + age_parent + female_respondent + 
                                   educ_par + age_partner + educ_partner + duration)))
@@ -351,40 +339,173 @@ pool.r.squared(with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
 m1b <- with(imputed, lm_robust(cohesion ~ factor(step) + factor(sharedchild) +
                               age_child + female_child  + age_parent + female_respondent + 
                               educ_par + age_partner + educ_partner + duration + 
-                              A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
+                              relqual_partner + relqual_child + relqual_child_partner, clusters = CBSvolgnr_hh))
 m1b <- pool(m1b)
 m1b <- summary(m1b)
+m1b
 pool.r.squared(with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
                                          age_child + female_child  + age_parent + female_respondent + 
                                          educ_par + age_partner + educ_partner + duration + 
-                                         A3J02 + A3J29 + A3P12)))
+                                  relqual_partner + relqual_child + relqual_child_partner)))
 
+#Test if M1a and M1b differ statistically significantly from one another
+m1a_test <- with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration))
 
-#check for interactions with duration
-m1b_interact <- with(imputed, lm_robust(cohesion ~ factor(step)*duration + factor(sharedchild)*duration +
+m1b_test <- with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
                                  age_child + female_child  + age_parent + female_respondent + 
                                  educ_par + age_partner + educ_partner + duration + 
-                                 A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
-m1b_interact <- pool(m1b_interact)
-m1b_interact <- summary(m1b_interact)
-m1b_interact
+                               relqual_partner + relqual_child + relqual_child_partner))
+
+cat('p-value for H0:', D3(m1b_test, m1a_test)[["result"]][4])
+
+
+
+#Test for significant differences
+m1b_interact_test <- with(imputed, lm(cohesion ~ factor(step)*duration + factor(sharedchild)*duration +
+                                          age_child + female_child  + age_parent + female_respondent + 
+                                          educ_par + age_partner + educ_partner + duration + 
+                                        relqual_partner + relqual_child + relqual_child_partner))
+
+cat('p-value for H0:', D3(m1b_interact_test, m1b_test)[["result"]][4])
+
 
 #Model 2a: residence, no control
-m2a <- with(imputed, lm_robust(cohesion ~ relevel(factor(biores), ref = '2') + relevel(factor(stepres), ref = '2') +
+m2a <- with(imputed, lm_robust(cohesion ~ factor(resbiochild_nonres_recode) + factor(resstepchild) + factor(sharedchild) + 
                                  age_child + female_child  + age_parent + female_respondent + 
                                  educ_par + age_partner + educ_partner + duration,
                                clusters = CBSvolgnr_hh))
 m2a <- pool(m2a)
 m2a <- summary(m2a)
+m2a
 
 #Model 2b: residence, controls
-m2b <- with(imputed, lm_robust(cohesion ~ relevel(factor(biores), ref = '2') + relevel(factor(stepres), ref = '2')+
+m2b <- with(imputed, lm_robust(cohesion ~ factor(resbiochild_nonres_recode) + factor(resstepchild)+ factor(sharedchild) +
                                  age_child + female_child  + age_parent + female_respondent + 
                                  educ_par + age_partner + educ_partner + duration + 
-                                 A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
+                                 relqual_child + relqual_child_partner + relqual_partner, clusters = CBSvolgnr_hh))
 m2b <- pool(m2b)
 m2b <- summary(m2b)
 m2b
+
+
+#TEST IF THERE IS AN INTERACTION EFFECT ABOVE AND BEYOND RESIDENCE PER SE
+residence_nullmodel <- with(imputed, lm(cohesion ~ factor(resbiochild_nonres_recode) + factor(resstepchild)+ factor(sharedchild) +
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration 
+                                 #+ 
+                                 #relqual_child + relqual_child_partner + relqual_partner
+                                ))
+
+#Calculate interaction term in such a way that there are no NA terms in the model
+full.impdata <- complete(imputed, 'long', include = TRUE)
+full.impdata$combinations <- case_when(
+                                      (full.impdata$resstepchild == 0 & full.impdata$resbiochild_nonres_recode == 1) ~ 1,
+                                      (full.impdata$resstepchild == 0 & full.impdata$resbiochild_nonres_recode == 3) ~ 2,
+                                      (full.impdata$resstepchild == 1 & full.impdata$resbiochild_nonres_recode == 1) ~ 3,
+                                      (full.impdata$resstepchild == 1 & full.impdata$resbiochild_nonres_recode == 2) ~ 4,
+                                      (full.impdata$resstepchild == 1 & full.impdata$resbiochild_nonres_recode == 3) ~ 5,
+                                      (full.impdata$resstepchild == 2 & full.impdata$resbiochild_nonres_recode == 1) ~ 6,
+                                      (full.impdata$resstepchild == 2 & full.impdata$resbiochild_nonres_recode == 3) ~ 7,
+                                      (full.impdata$resstepchild == 3 & full.impdata$resbiochild_nonres_recode == 1) ~ 8,
+                                      (full.impdata$resstepchild == 3 & full.impdata$resbiochild_nonres_recode == 2) ~ 9,
+                                      (full.impdata$resstepchild == 3 & full.impdata$resbiochild_nonres_recode == 3) ~ 10
+                                      )
+new_imp <- as.mids(full.impdata)
+
+
+residence_interactionmodel <- with(new_imp, lm(cohesion ~ factor(combinations)+factor(resbiochild_nonres_recode) + factor(resstepchild) + factor(sharedchild) +
+                                                 age_child + female_child  + age_parent + female_respondent + 
+                                                 educ_par + age_partner + educ_partner + duration 
+                                               #+ relqual_child + relqual_child_partner + relqual_partner
+                                                 ))
+
+likelihood_test <- D1(residence_interactionmodel, residence_nullmodel)
+likelihood_test
+
+#test for each model separately
+f_test <- lapply(1:5, function(i){
+  complete <- complete(new_imp, action = i)
+  lm1 <- lm(cohesion ~ factor(combinations)*factor(resstepchild) + factor(resbiochild_nonres_recode) + factor(resstepchild) + factor(sharedchild) +
+              age_child + female_child  + age_parent + female_respondent + 
+              educ_par + age_partner + educ_partner + duration + 
+              relqual_child + relqual_child_partner + relqual_partner, data = complete)
+  lm0 <- lm(cohesion ~ factor(resbiochild_nonres_recode)+ factor(resstepchild) + factor(sharedchild) +
+              age_child + female_child  + age_parent + female_respondent + 
+              educ_par + age_partner + educ_partner + duration + 
+              relqual_child + relqual_child_partner + relqual_partner, data = complete)
+  anova <- anova(lm1, lm0)
+  return(anova)
+})
+
+p_val_anova <-
+  (f_test[[1]][["Pr(>F)"]][2] + f_test[[2]][["Pr(>F)"]][2] + f_test[[3]][["Pr(>F)"]][2] +
+                   f_test[[4]][["Pr(>F)"]][2] + f_test[[5]][["Pr(>F)"]][2])/5
+
+f_anova <- (f_test[[1]][["F"]][2] + f_test[[2]][["F"]][2] + f_test[[3]][["F"]][2] +
+                f_test[[4]][["F"]][2] + f_test[[5]][["F"]][2])/5
+  
+df_anova <- (f_test[[1]][["F"]][2] + f_test[[2]][["F"]][2] + f_test[[3]][["F"]][2] +
+               f_test[[4]][["F"]][2] + f_test[[5]][["F"]][2])/5
+
+df <- f_test[[1]][["Df"]][2]
+
+cat('df: ', df, 'F: ', f_anova, 'Pr(>F): ', p_val_anova)
+
+#plot the differences
+differences <- lapply(1:5, function(i){
+  complete <- complete(new_imp, action = i)
+  lm1 <- lm(cohesion ~ factor(combinations) + factor(resstepchild) + factor(sharedchild) +
+              age_child + female_child  + age_parent + female_respondent + 
+              educ_par + age_partner + educ_partner + duration + 
+              relqual_child + relqual_child_partner + relqual_partner, data = complete)
+  predictions <- ggpredict(lm1, "combinations")
+  return(predictions)
+})
+predicted_means <- c((differences[[1]][["predicted"]] + differences[[2]][["predicted"]] + differences[[3]][["predicted"]] + differences[[4]][["predicted"]] 
++ differences[[5]][["predicted"]]) / 5)
+
+comp <- complete(new_imp, action = 1)
+
+lm1 <- lm(cohesion ~ factor(resstepchild)*factor(resbiochild_nonres_recode) + factor(resstepchild) + factor(resbiochild_nonres_recode) + factor(sharedchild) +
+            age_child + female_child  + age_parent + female_respondent + 
+            educ_par + age_partner + educ_partner + duration + 
+            relqual_child + relqual_child_partner + relqual_partner, data = comp)
+
+plot.interact <- qplot(x = resbiochild_nonres_recode, y = cohesion, color = factor(resstepchild), data = comp, geom=c("point", "jitter")) + stat_smooth(method = "lm", se = TRUE, fullrange = TRUE) + theme(legend.position="top")
+plot.main <- qplot(x = resstepchild, y = cohesion, data = comp, geom=c("point", "jitter")) + stat_smooth(method = "lm", se = TRUE, fullrange = TRUE)
+grid.arrange(plot.interact, plot.main, ncol = 2)
+
+
+
+
+plot.interact
+
+library(emmeans)
+emcatcat <- emmeans(lm1, ~ resbiochild_nonres_recode*resstepchild)
+emcatcat <- data.frame(emcatcat)
+contrast(emcatcat, "revpairwise", by="resbiochild_nonres_recode", adjust="sidak")
+
+colors <- c("No" = "red", "Resident" = "blue", "Nonresident" = "darkgreen", "P.t. resident" = "orange")
+
+pd <- position_dodge(0.1) # move them .05 to the left and right
+ggplot(data = emcatcat, aes(x = factor(resbiochild_nonres_recode), y = emmean, color=factor(resstepchild)
+                            )) +
+  geom_point(position = pd) +
+  geom_errorbar(aes(ymin=emmean-SE, ymax=emmean+SE), width=.1, position = pd) +
+  ylim(1,5) +
+  scale_x_discrete(labels = c('Resident', 'Non resident', 'Part-time resident'))+
+  xlab('Residence focal child') +
+  ylab('Predicted value cohesion') +
+  scale_color_manual(name = "Presence/Residence Stepchild", labels = c("No", "Resident", 'Nonresident', 'P.t. resident'), 
+                    values = c('red', 'black', 'blue', 'green'))
+  
+  
+
+emmip(lm1, resbiochild_nonres_recode ~ resstepchild,CIs=TRUE, style = 'factor', type = "response")
+
+
 
 #Model 3a: combinations, no controls
 m3a <- with(imputed, lm_robust(cohesion ~ factor(combinations) +
@@ -410,10 +531,33 @@ pool.r.squared(with(imputed, lm(cohesion ~ factor(combinations)+
                                          A3J02 + A3J29 + A3P12)))
  
 
+m2b <- with(imputed, lm(cohesion ~ factor(biores) + factor(stepres)+
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration + 
+                                 A3J02 + A3J29 + A3P12))
+m3b <- with(imputed, lm(cohesion ~ factor(combinations)+
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration + 
+                                 A3J02 + A3J29 + A3P12))
+d3 <- D3(m3b, m2b)
+summary(d3)
 
+#interaction without rank deficiency
+table <- with(imputed, table(factor(resstepchild), factor(resbiochild_nonres_recode)))
+table <- round((table[["analyses"]][[1]] + table[["analyses"]][[2]] + table[["analyses"]][[3]] +
+              table[["analyses"]][[4]] + table[["analyses"]][[5]]) / 5, 0)
+table
 
+interact <- with(imputed, lm(cohesion ~ factor(resstepchild) + factor(resbiochild) + factor(resstepchild)*factor(resbiochild)))
+summary(pool(interact))
 
-
+#TEST OF INTERACTIONS RESIDENCE
+m_res_interactions <- with(imputed, lm_robust(cohesion ~ relevel(factor(biores), ref = '2'):relevel(factor(stepres), ref = '2')+
+                                 age_child + female_child  + age_parent + female_respondent + 
+                                 educ_par + age_partner + educ_partner + duration + 
+                                 A3J02 + A3J29 + A3P12, clusters = CBSvolgnr_hh))
+m_res_interactions <- pool(m_res_interactions)
+m_res_interactions <- summary (m_res_interactions)
 
 
 #Run logistic regression
