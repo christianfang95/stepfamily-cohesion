@@ -27,21 +27,15 @@ raw$resbiochild_nonres_recode <- recode(raw$resbiochild, '1' = 1L, '2' = 2L, '3'
 
 
 #Make residence variables
-#Biochild
-#raw$biores <- raw$A3I08
-#raw$biores <- na_if(raw$biores, 98)
-#raw$biores <- recode(raw$biores, `1` = 1L, `2` = 2L, `3` = 3L, `4` = 2L)
-#Presence stepchild
-#raw$step <- raw$A3L06
-#raw$step <- recode(raw$step, `1` = 1L, `2` = 0L)
+
 #Stepchild residence
-##raw$stepres <- raw$A3P10
-#raw$stepres <- na_if(raw$stepres, 98)
-#raw$stepres <- recode(raw$stepres, `1` = 1L, `2` = 2L, `3` = 3L, `4` = 2L)
-#raw$stepres <- case_when(raw$step == 0 ~ 0, 
-#                         raw$stepres == 1 ~ 1,
-#                         raw$stepres == 2 ~ 2, 
-#                         raw$stepres == 3 ~ 3)
+raw$stepres_alone <- raw$A3P10
+raw$stepres_alone <- na_if(raw$A3P10, 98)
+raw$stepres_alone <- case_when(raw$step == 0 ~ 0, 
+                         raw$A3P10 == 1 ~ 1,
+                         raw$A3P10 == 2 ~ 2, 
+                         raw$A3P10 == 3 ~ 3,
+                         raw$A3P10 == 4 ~ 4)
 
 #Drop respondents if: stepres == 0 & biores == 2, stepres == 2 & biores == 2
 #raw$filter <- case_when(raw$stepres == 0 & raw$biores == 2 ~ 1,
@@ -55,7 +49,7 @@ raw$resbiochild_nonres_recode <- recode(raw$resbiochild, '1' = 1L, '2' = 2L, '3'
 
 data <- dplyr::select(raw, single, LAT, 
                       CBSvolgnr_hh, cohes_a, cohes_b, cohes_c, cohes_d, cohesion,  
-                      sharedchild, parttime, age_child, female_child, age_parent, 
+                      sharedchild, stepres_alone, parttime, age_child, female_child, age_parent, 
                       female_respondent, duration, educ_par, educ_partner, age_partner, resbiochild_nonres_recode, resstepchild, resbiochild, step, relqual_child, relqual_partner, relqual_child_partner)
 
 #Exclude LAT and single people
@@ -80,6 +74,7 @@ impute_data <- function(original_data){
   method[c("resbiochild")]="cart"
   method[c("step")]="cart"
   method[c("resbiochild_nonres_recode")]="cart"
+  method[c("stepres_alone")]="cart"
   method[c("cohes_a")]="cart"
   method[c("cohes_b")]="cart"
   method[c("cohes_c")]="cart"
@@ -104,10 +99,19 @@ imputed_ <- imputed
 densityplot(imputed)
 
 # Make selections
+with(imputed, table(resbiochild, stepres_alone))
 
 #Remove nonres bio child and no stepchild
-version1 <- filter(imputed, ! ((resbiochild_nonres_recode == 2) & (resstepchild == 2))) # Nonres-nonres out
-imputed <- filter(version1, ! ((resbiochild_nonres_recode == 2) & (resstepchild == 0))) #Nonres-no step out
+imputed <- filter(imputed, ! ((resbiochild == 2) & (stepres_alone == 2))) # Nonres-nonres out
+imputed <- filter(imputed, ! ((resbiochild == 2) & (stepres_alone == 0))) # Nonres-no step out
+imputed <- filter(imputed, ! ((resbiochild == 4) & (stepres_alone == 0))) # Alone-no step out
+imputed <- filter(imputed, ! ((resbiochild == 4) & (stepres_alone == 4))) # Alone-alone
+imputed <- filter(imputed, ! ((resbiochild == 4) & (stepres_alone == 2))) # Bio Alone-step nonres
+imputed <- filter(imputed, ! ((resbiochild == 2) & (stepres_alone == 4))) # Bio nonres-step alone
+
+
+with(imputed, table(resbiochild, stepres_alone))
+
 
 #Summary table for descriptive statistics
 summary_table <- function(){
@@ -358,7 +362,7 @@ m1b_test <- with(imputed, lm(cohesion ~ factor(step) + factor(sharedchild) +
                                  educ_par + age_partner + educ_partner + duration + 
                                relqual_partner + relqual_child + relqual_child_partner))
 
-cat('p-value for H0:', D3(m1b_test, m1a_test)[["result"]][4])
+cat('p-value for H0:', D1(m1b_test, m1a_test)[["result"]][4])
 
 
 
@@ -368,11 +372,11 @@ m1b_interact_test <- with(imputed, lm(cohesion ~ factor(step)*duration + factor(
                                           educ_par + age_partner + educ_partner + duration + 
                                         relqual_partner + relqual_child + relqual_child_partner))
 
-cat('p-value for H0:', D3(m1b_interact_test, m1b_test)[["result"]][4])
+cat('p-value for H0:', D1(m1b_interact_test, m1b_test)[["result"]][4])
 
 
 #Model 2a: residence, no control
-m2a <- with(imputed, lm_robust(cohesion ~ factor(resbiochild_nonres_recode) + factor(resstepchild) + factor(sharedchild) + 
+m2a <- with(imputed, lm_robust(cohesion ~ factor(resbiochild) + factor(stepres_alone) + factor(sharedchild) + 
                                  age_child + female_child  + age_parent + female_respondent + 
                                  educ_par + age_partner + educ_partner + duration,
                                clusters = CBSvolgnr_hh))
@@ -381,23 +385,31 @@ m2a <- summary(m2a)
 m2a
 
 #Model 2b: residence, controls
-m2b <- with(imputed, lm_robust(cohesion ~ factor(resbiochild_nonres_recode) + factor(resstepchild)+ factor(sharedchild) +
+m2b <- with(imputed, lm_robust(cohesion ~ factor(resbiochild) + factor(stepres_alone)+ factor(sharedchild) +
                                  age_child + female_child  + age_parent + female_respondent + 
                                  educ_par + age_partner + educ_partner + duration + 
                                  relqual_child + relqual_child_partner + relqual_partner, clusters = CBSvolgnr_hh))
-m2b <- pool(m2b)
-m2b <- summary(m2b)
-m2b
+m2b_sum <- pool(m2b)
+m2b_sum <- summary(m2b_sum)
+m2b_sum
+
+#Test if there is an interaction with duration
+m2b_interact <- with(imputed, lm_robust(cohesion ~ factor(resbiochild)*duration + factor(stepres_alone)*duration + factor(sharedchild) +
+                                          age_child + female_child  + age_parent + female_respondent + 
+                                          educ_par + age_partner + educ_partner + duration + 
+                                          relqual_child + relqual_child_partner + relqual_partner, clusters = CBSvolgnr_hh))
+cat('p-value for H0:', D1(m2b_interact, m2b)[["result"]][4])
+
 
 
 #TEST IF THERE IS AN INTERACTION EFFECT ABOVE AND BEYOND RESIDENCE PER SE
-residence_nullmodel <- with(imputed, lm(cohesion ~ factor(resbiochild_nonres_recode) + factor(resstepchild)+ factor(sharedchild) +
+residence_nullmodel <- with(imputed, lm(cohesion ~ relevel(factor(resbiochild), ref = '2') + relevel(factor(stepres_alone), ref = '2')+ factor(sharedchild) +
                                  age_child + female_child  + age_parent + female_respondent + 
                                  educ_par + age_partner + educ_partner + duration 
-                                 #+ 
-                                 #relqual_child + relqual_child_partner + relqual_partner
+                                 + 
+                                 relqual_child + relqual_child_partner + relqual_partner
                                 ))
-
+summary(pool(residence_nullmodel))
 #Calculate interaction term in such a way that there are no NA terms in the model
 full.impdata <- complete(imputed, 'long', include = TRUE)
 full.impdata$combinations <- case_when(
@@ -415,10 +427,10 @@ full.impdata$combinations <- case_when(
 new_imp <- as.mids(full.impdata)
 
 
-residence_interactionmodel <- with(new_imp, lm(cohesion ~ factor(combinations)+factor(resbiochild_nonres_recode) + factor(resstepchild) + factor(sharedchild) +
+residence_interactionmodel <- with(imputed, lm(cohesion ~ factor(resbiochild)*factor(stepres_alone)  + factor(sharedchild) +
                                                  age_child + female_child  + age_parent + female_respondent + 
                                                  educ_par + age_partner + educ_partner + duration 
-                                               #+ relqual_child + relqual_child_partner + relqual_partner
+                                               + relqual_child + relqual_child_partner + relqual_partner
                                                  ))
 
 likelihood_test <- D1(residence_interactionmodel, residence_nullmodel)
