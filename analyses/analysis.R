@@ -105,6 +105,7 @@ with(imputed, table(resbiochild, resstepchild))
 imputed <- filter(imputed, ! ((resbiochild == 2) & (resstepchild == 2))) # Nonres-nonres out
 imputed <- filter(imputed, ! ((resbiochild == 2) & (resstepchild == 0))) # Nonres-no step out
 
+final_n <- nrow(imputed$data)
 
 #Recode 
 
@@ -405,8 +406,12 @@ concrete_yhat <- ggplot(data=predictions_concrete, aes(x=factor(x), y=predicted)
                  ylim(0,5) +
                  theme(plot.title=element_text(hjust=0.5))
 
+#Panel A and B for Figure 3
 
-
+ggarrange(step_yhat, concrete_yhat, 
+          labels = c('A', 'B'), 
+          ncol = 2, 
+          nrow = 1)
 
 
 
@@ -445,13 +450,13 @@ m2b_sum <- pool(m2b)
 m2b_sum <- summary(m2b_sum)
 m2b_sum
 
-pool.r.squared(with(imputed, lm(cohesion ~ factor(resbiochild_nonres_recode) + factor(resstepchild) + factor(sharedchild) +
+pool.r.squared(with(imputed, lm(cohesion ~ factor(resbiochild) + factor(resstepchild) + factor(sharedchild) +
                                   age_child + female_child  + age_parent + female_respondent + 
                                   educ_par + age_partner + educ_partner + duration + 
                                   relqual_child + relqual_child_partner + relqual_partner)))
 
 predictions <- lapply(1:5, function(i) {
-  m <- lm_robust(cohesion ~ factor(resbiochild_nonres_recode) + factor(resstepchild) + factor(sharedchild) +
+  m <- lm_robust(cohesion ~ factor(resbiochild) + factor(resstepchild) + factor(sharedchild) +
                    age_child + female_child  + age_parent + female_respondent + 
                    educ_par + age_partner + educ_partner + duration + 
                    relqual_child + relqual_child_partner + relqual_partner, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
@@ -469,6 +474,37 @@ stepresidence_yhat <- ggplot(data=predictions_stepresidence, aes(x=factor(x), y=
                               'Nonresidential \nstepchild', 'Part-time residential \nstepchild')) +
   ylim(0,5) +
   theme(plot.title=element_text(hjust=0.5))
+
+predictions <- lapply(1:5, function(i) {
+  m <- lm_robust(cohesion ~ factor(resbiochild) + factor(resstepchild) + factor(sharedchild) +
+                   age_child + female_child  + age_parent + female_respondent + 
+                   educ_par + age_partner + educ_partner + duration + 
+                   relqual_child + relqual_child_partner + relqual_partner, clusters = CBSvolgnr_hh, data = complete(imputed, action = i))
+  ggpredict(m, "resbiochild")
+})
+predictions_resbiochild <- pool_predictions(predictions)
+
+
+resbiochild_yhat <- ggplot(data=predictions_resbiochild, aes(x=factor(x), y=predicted)) +
+  geom_bar(stat="identity", fill="white", color='black')+ 
+  geom_errorbar(aes(ymin=conf.low, ymax=conf.high), width=.1) + 
+  ylab("Predicted stepfamily cohesion") +
+  xlab('')+
+  ggtitle("Residence of focal child") +
+  scale_x_discrete(labels = c('Residential \nchild',
+                              'Nonresidential \nchild', 
+                              'Part-time residential \nchild')) +
+  ylim(0,5) +
+  theme(plot.title=element_text(hjust=0.5))
+
+#Panel C and D for Figure 3
+
+ggarrange(resbiochild_yhat, stepresidence_yhat, 
+          labels = c('C', 'D'), 
+          ncol = 2, 
+          nrow = 1)
+
+
 
 
 
@@ -499,7 +535,7 @@ full.impdata$combinations <- case_when(
                                       (full.impdata$resstepchild == 3 & full.impdata$resbiochild == 3) ~ 4, #pt-pt
                                       (full.impdata$resstepchild == 3 & full.impdata$resbiochild == 1) ~ 2, #pt-res
                                       (full.impdata$resstepchild == 2 & full.impdata$resbiochild == 3) ~ 2, #res-pt
-                                      
+                                      (full.impdata$resstepchild == 3 & full.impdata$resbiochild == 2) ~ 2, #pt-res
     
                                       )
 new_imp <- as.mids(full.impdata)
@@ -587,12 +623,17 @@ combinations_yhat <- ggplot(data=predictions_combinations, aes(x=factor(x), y=pr
   ylab("Predicted stepfamily cohesion") +
   xlab('')+
   ggtitle("Presence and residence of stepchild") +
-  scale_x_discrete(labels = c('No stepchild', 'Residential \nstepchild',
-                              'Nonresidential \nstepchild', 'Part-time residential \nstepchild', 'last')) +
+  scale_x_discrete(labels = c('No stepchild, \nresidential \nfocal child', 
+                              'Both (part-time) \nresident',
+                              'One (part-time) \nand the other \nnonresident',
+                              'Both part-time')) +
   ylim(0,5) +
   theme(plot.title=element_text(hjust=0.5))
 
+combinations_yhat
 
+ggarrange(combinations_yhat, 
+          labels = c('E'))
 
 comp <- complete(new_imp, action = 1)
 
