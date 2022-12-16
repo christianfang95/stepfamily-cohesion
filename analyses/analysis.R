@@ -288,8 +288,7 @@ histogram <- function(){
   merged <- merge_imputations(data, imputed)
   # 1. Create the histogram plot
   phist <- gghistogram(
-    merged, x = "cohesion", bins=10, ylab = "Count", xlab = "Stepfamily cohesion") +
-    labs(title = "Histogram and density of Stepfamily Cohesion")
+    merged, x = "cohesion", bins=10, ylab = "Count", xlab = "Stepfamily cohesion")
 
 }
 
@@ -529,14 +528,15 @@ summary(pool(residence_nullmodel))
 full.impdata <- complete(imputed, 'long', include = TRUE)
 full.impdata$combinations <- case_when(
                                       (full.impdata$resstepchild == 0 & full.impdata$resbiochild == 1) ~ 1, #no-res
-                                      (full.impdata$resstepchild == 1 & full.impdata$resbiochild == 1) ~ 2, #resres
+                                      (full.impdata$resstepchild == 0 & full.impdata$resbiochild == 3) ~ 1, #no - pt
+                                      (full.impdata$resstepchild == 1 & full.impdata$resbiochild == 1) ~ 2, #res- res
                                       (full.impdata$resstepchild == 1 & full.impdata$resbiochild == 2) ~ 3, #res-nonres
+                                      (full.impdata$resstepchild == 1 & full.impdata$resbiochild == 3) ~ 2, #res-nonres
                                       (full.impdata$resstepchild == 2 & full.impdata$resbiochild == 1) ~ 3, #nonres-res
-                                      (full.impdata$resstepchild == 3 & full.impdata$resbiochild == 3) ~ 4, #pt-pt
-                                      (full.impdata$resstepchild == 3 & full.impdata$resbiochild == 1) ~ 2, #pt-res
                                       (full.impdata$resstepchild == 2 & full.impdata$resbiochild == 3) ~ 2, #res-pt
+                                      (full.impdata$resstepchild == 3 & full.impdata$resbiochild == 1) ~ 2, #pt-res
                                       (full.impdata$resstepchild == 3 & full.impdata$resbiochild == 2) ~ 2, #pt-res
-    
+                                      (full.impdata$resstepchild == 3 & full.impdata$resbiochild == 3) ~ 4 #pt-pt
                                       )
 new_imp <- as.mids(full.impdata)
 
@@ -580,8 +580,27 @@ df <- f_test[[1]][["Df"]][2]
 cat('df: ', df, 'F: ', f_anova, 'Pr(>F): ', p_val_anova)
 
 #Model 3a
-imputed_combinations <- 
+m3a <- with(new_imp, lm_robust(cohesion ~ factor(combinations) +
+                                 factor(sharedchild) +
+                                 age_child + female_child  + age_parent + 
+                                 female_respondent + educ_par + age_partner + 
+                                 educ_partner + duration, 
+                                 clusters = CBSvolgnr_hh)) 
 
+m3a <- summary(pool(m3a))
+m3a
+
+m3a_table <- m3a[c('term', 'estimate', 'std.error', 'p.value')]
+m3a_table$estimate <- round(m3a_table$estimate, 2)
+m3a_table$std.error <- round(m3a_table$std.error, 2)
+m3a_table$p.value <- round(m3a_table$p.value, 3)
+View(m3a_table)
+
+pool.r.squared(with(new_imp, lm(cohesion ~ factor(combinations) +
+                                  factor(sharedchild) +
+                                  age_child + female_child  + age_parent + 
+                                  female_respondent + educ_par + age_partner + 
+                                  educ_partner + duration )))
 
 #Model 3b
 m3b <- with(new_imp, lm_robust(cohesion ~ factor(combinations) +
@@ -595,16 +614,39 @@ m3b <- pool(m3b)
 m3b <- summary(m3b)
 m3b
 
+m3b_table <- m3b[c('term', 'estimate', 'std.error', 'p.value')]
+m3b_table$estimate <- round(m3b_table$estimate, 2)
+m3b_table$std.error <- round(m3b_table$std.error, 2)
+m3b_table$p.value <- round(m3b_table$p.value, 3)
+View(m3b_table)
+
+m3_table <- data.frame(name = c(m3b$term),
+                       b = c(round(m3b$estimate, 2)),
+                       se = c(round(m3b$std.error), 2),
+                       p = c(round(m3b$p.value), 3)
+                             )
+m3_table$estimate <- round(m3b$estimate, 2)
+
 pool.r.squared(with(new_imp, lm(cohesion ~ factor(combinations) +
                                   factor(sharedchild) +
                                   age_child + female_child  + age_parent + 
                                   female_respondent + educ_par + age_partner + 
                                   educ_partner + duration + relqual_child + 
-                                  relqual_child_partner + relqual_partner, )))
+                                  relqual_child_partner + relqual_partner)))
 
 D1(m2b, m3b)
 
 
+
+
+m3b_int <- with(new_imp, lm_robust(cohesion ~ factor(combinations) +factor(resbiochild) + factor(resstepchild) +
+                                 factor(sharedchild) +
+                                 age_child + female_child  + age_parent + 
+                                 female_respondent + educ_par + age_partner + 
+                                 educ_partner + duration + relqual_child + 
+                                 relqual_child_partner + relqual_partner, 
+                               clusters = CBSvolgnr_hh))
+m3b_int_sum <- summary(pool(m3b_int))
 
 #plot the differences
 
